@@ -1,0 +1,214 @@
+# Helm Chart .gitignore
+
+# Helm package files
+*.tgz
+*.tar.gz
+
+# Helm dependency management
+charts/*.tgz
+charts/*/
+requirements.lock
+Chart.lock
+
+# Helm templates debug output
+debug/
+rendered-templates/
+manifests-generated/
+
+# Local development and testing files
+values-local.yaml
+values-dev-local.yaml
+values-test-local.yaml
+values-override.yaml
+*-local.yaml
+*-override.yaml
+test-values.yaml
+
+# Sensitive configuration files (passwords, secrets)
+values-prod.yaml
+values-production.yaml
+values-staging.yaml
+secret-values.yaml
+secrets.yaml
+*-secrets.yaml
+*.secret.yaml
+mysql-passwords.yaml
+
+# Database files and data (if testing locally)
+*.db
+*.sqlite
+*.sqlite3
+data/
+mysql-data/
+backup/
+dumps/
+
+# Certificates and TLS files
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.jks
+*.keystore
+ca.crt
+ca.key
+server.crt
+server.key
+client.crt
+client.key
+tls/
+ssl/
+
+# Testing and validation output
+test-output/
+validation-results/
+lint-results.txt
+helm-test-results/
+coverage.txt
+coverage.html
+*.cover
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# JetBrains IDEs
+*.iml
+*.ipr
+*.iws
+
+# Visual Studio Code
+*.code-workspace
+
+# Vim
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+[._]sw[a-p]
+Session.vim
+Sessionx.vim
+.netrwhist
+tags
+[._]*.un~
+
+
+# Logs and temporary files
+*.log
+logs/
+helm-debug.log
+debug.log
+tmp/
+temp/
+.tmp/
+*.tmp
+*.bak
+*.backup
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+desktop.ini
+
+# Node.js (if using for testing/validation)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# Python (if using for testing/scripting)
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+venv/
+env/
+.env
+.venv/
+
+# Go (if using for tooling)
+vendor/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Docker (if building custom MySQL images)
+.dockerignore
+Dockerfile.local
+docker-compose.override.yml
+
+# Kubernetes testing files
+*.kubeconfig
+kubeconfig
+kube-config
+k8s-output/
+kubectl-output/
+
+# Terraform (if using for infrastructure)
+*.tfstate
+*.tfstate.*
+.terraform/
+*.tfvars
+terraform.tfvars
+
+# Monitoring and metrics test data
+prometheus-data/
+grafana-data/
+metrics-output/
+
+# Documentation build artifacts
+docs/_build/
+docs/site/
+_site/
+*.md~
+
+# Helm plugin cache
+.helm/
+
+# Kind/minikube cluster configs
+kind-config.yaml
+minikube-config.yaml
+
+# Local testing scripts and configs
+scripts/local/
+local-testing/
+test-local/
+
+# MySQL specific ignores
+mysql.conf.d/
+my.cnf.local
+mysqld.log
+mysql-error.log
+mysql-slow.log
+binlog.*
+relay-log.*
+
+# Backup and migration files
+*.sql.gz
+*.sql.bz2
+backup-*.sql
+migration-*.sql
+restore-*.sql
+
+# Performance test results
+benchmark-results/
+load-test-output/
+performance-*.txt
+
+# Custom project specific files
+# Add your specific files/folders here:
+# custom-config/
+# internal-docs/

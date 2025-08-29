@@ -1,0 +1,396 @@
+{{- if eq .Values.architecture "replication" }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "mysql.secondary.fullname" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "mysql.labels" . | nindent 4 }}
+    app.kubernetes.io/component: secondary
+spec:
+  serviceName: {{ include "mysql.secondary.fullname" . }}-headless
+  replicas: {{ .Values.secondary.replicaCount }}
+  podManagementPolicy: {{ .Values.secondary.podManagementPolicy }}
+  selector:
+    matchLabels:
+      {{- include "mysql.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: secondary
+  updateStrategy:
+    {{- toYaml .Values.secondary.updateStrategy | nindent 4 }}
+  template:
+    metadata:
+      annotations:
+        {{- if (include "mysql.secondary.createConfigmap" .) }}
+        checksum/configuration: {{ include (print $.Template.BasePath "/secondary/configmap.yaml") . | sha256sum }}
+        {{- end }}
+        {{- if .Values.passwordUpdateJob.enabled }}
+        # Force pod restart when passwords are updated (Bitnami pattern)
+        rollme: {{ randAlphaNum 10 | quote }}
+        {{- end }}
+        {{- with .Values.secondary.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "mysql.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: secondary
+        {{- with .Values.secondary.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "mysql.serviceAccountName" . }}
+      {{- if .Values.secondary.podSecurityContext.enabled }}
+      securityContext:
+        fsGroup: {{ .Values.secondary.podSecurityContext.fsGroup }}
+        runAsUser: {{ .Values.secondary.podSecurityContext.runAsUser }}
+      {{- end }}
+      {{- with .Values.secondary.priorityClassName }}
+      priorityClassName: {{ . | quote }}
+      {{- end }}
+      {{- with .Values.secondary.schedulerName }}
+      schedulerName: {{ . | quote }}
+      {{- end }}
+      {{- with .Values.secondary.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ . }}
+      {{- end }}
+      {{- with .Values.secondary.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.secondary.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.secondary.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.secondary.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.secondary.hostAliases }}
+      hostAliases:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        {{- if .Values.volumePermissions.enabled }}
+        - name: volume-permissions
+          image: {{ include "mysql.volumePermissions.image" . }}
+          imagePullPolicy: {{ .Values.volumePermissions.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              chown -R {{ .Values.secondary.podSecurityContext.runAsUser }}:{{ .Values.secondary.podSecurityContext.fsGroup }} /var/lib/mysql
+          securityContext:
+            runAsUser: 0
+          {{- with .Values.volumePermissions.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+        {{- end }}
+        - name: wait-for-primary
+          image: {{ include "mysql.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /bin/bash
+            - -ec
+            - |
+              echo "Waiting for primary MySQL to be ready..."
+              until mysql -h{{ include "mysql.primary.fullname" . }}.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }} -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT 1" 2>/dev/null; do
+                echo "Waiting for primary to be ready..."
+                sleep 5
+              done
+              echo "Primary is ready!"
+              
+              # Check if replication user exists
+              mysql -h{{ include "mysql.primary.fullname" . }}.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }} -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT User FROM mysql.user WHERE User='${MYSQL_REPLICATION_USER}'" 2>/dev/null
+              
+              echo "Creating replication setup script..."
+              cat > /tmp/init-replication.sh << 'EOF'
+              #!/bin/bash
+              # This script will be executed by the secondary container after MySQL starts
+              echo "Setting up replication on secondary..."
+              
+              # Wait a bit for MySQL to be fully ready
+              sleep 10
+              
+              # Configure replication (use socket connection, not TCP)
+              mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "
+                STOP REPLICA;
+                RESET REPLICA ALL;
+                CHANGE REPLICATION SOURCE TO 
+                  SOURCE_HOST='{{ include "mysql.primary.fullname" . }}.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }}',
+                  SOURCE_PORT=3306,
+                  SOURCE_USER='${MYSQL_REPLICATION_USER}',
+                  SOURCE_PASSWORD='${MYSQL_REPLICATION_PASSWORD}',
+                  SOURCE_SSL=1,
+                  SOURCE_AUTO_POSITION=1;
+                START REPLICA;
+              " 2>/dev/null
+              
+              echo "Replication setup completed"
+              EOF
+              
+              chmod +x /tmp/init-replication.sh
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mysql.secretName" . }}
+                  key: mysql-root-password
+            - name: MYSQL_REPLICATION_USER
+              value: {{ .Values.auth.replicationUser | quote }}
+            - name: MYSQL_REPLICATION_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mysql.secretName" . }}
+                  key: mysql-replication-password
+          volumeMounts:
+            - name: init-scripts-replication
+              mountPath: /tmp
+        {{- with .Values.secondary.initContainers }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      containers:
+        - name: mysql
+          image: {{ include "mysql.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if .Values.diagnosticMode.enabled }}
+          command: {{- toYaml .Values.diagnosticMode.command | nindent 12 }}
+          args: {{- toYaml .Values.diagnosticMode.args | nindent 12 }}
+          {{- else if .Values.secondary.command }}
+          command: {{- toYaml .Values.secondary.command | nindent 12 }}
+          {{- end }}
+          {{- if not .Values.diagnosticMode.enabled }}
+          {{- if .Values.secondary.args }}
+          args: {{- toYaml .Values.secondary.args | nindent 12 }}
+          {{- end }}
+          {{- end }}
+          {{- if .Values.secondary.containerSecurityContext.enabled }}
+          securityContext:
+            runAsUser: {{ .Values.secondary.containerSecurityContext.runAsUser }}
+            runAsNonRoot: {{ .Values.secondary.containerSecurityContext.runAsNonRoot }}
+            allowPrivilegeEscalation: {{ .Values.secondary.containerSecurityContext.allowPrivilegeEscalation }}
+            {{- with .Values.secondary.containerSecurityContext.capabilities }}
+            capabilities:
+              {{- toYaml . | nindent 14 }}
+            {{- end }}
+          {{- end }}
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mysql.secretName" . }}
+                  key: mysql-root-password
+            - name: MYSQL_REPLICATION_USER
+              value: {{ .Values.auth.replicationUser | quote }}
+            - name: MYSQL_REPLICATION_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mysql.secretName" . }}
+                  key: mysql-replication-password
+            - name: MYSQL_MASTER_HOST
+              value: {{ include "mysql.primary.fullname" . }}.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }}
+            - name: MYSQL_MASTER_PORT
+              value: {{ .Values.primary.containerPorts.mysql | quote }}
+            {{- with .Values.secondary.extraEnvVars }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- if or .Values.secondary.extraEnvVarsCM .Values.secondary.extraEnvVarsSecret }}
+          envFrom:
+            {{- if .Values.secondary.extraEnvVarsCM }}
+            - configMapRef:
+                name: {{ .Values.secondary.extraEnvVarsCM }}
+            {{- end }}
+            {{- if .Values.secondary.extraEnvVarsSecret }}
+            - secretRef:
+                name: {{ .Values.secondary.extraEnvVarsSecret }}
+            {{- end }}
+          {{- end }}
+          ports:
+            - name: mysql
+              containerPort: {{ .Values.secondary.containerPorts.mysql }}
+              protocol: TCP
+          {{- if not .Values.diagnosticMode.enabled }}
+          {{- if .Values.secondary.livenessProbe.enabled }}
+          livenessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -ec
+                - |
+                  mysqladmin status -uroot -p"${MYSQL_ROOT_PASSWORD}"
+            initialDelaySeconds: {{ .Values.secondary.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.secondary.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.secondary.livenessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.secondary.livenessProbe.successThreshold }}
+            failureThreshold: {{ .Values.secondary.livenessProbe.failureThreshold }}
+          {{- end }}
+          {{- if .Values.secondary.readinessProbe.enabled }}
+          readinessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -ec
+                - |
+                  mysqladmin status -uroot -p"${MYSQL_ROOT_PASSWORD}"
+            initialDelaySeconds: {{ .Values.secondary.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.secondary.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.secondary.readinessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.secondary.readinessProbe.successThreshold }}
+            failureThreshold: {{ .Values.secondary.readinessProbe.failureThreshold }}
+          {{- end }}
+          {{- if .Values.secondary.startupProbe.enabled }}
+          startupProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -ec
+                - |
+                  mysqladmin status -uroot -p"${MYSQL_ROOT_PASSWORD}"
+            initialDelaySeconds: {{ .Values.secondary.startupProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.secondary.startupProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.secondary.startupProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.secondary.startupProbe.successThreshold }}
+            failureThreshold: {{ .Values.secondary.startupProbe.failureThreshold }}
+          {{- end }}
+          {{- end }}
+          {{- with .Values.secondary.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+            {{- if (include "mysql.secondary.createConfigmap" .) }}
+            - name: config
+              mountPath: /etc/mysql/conf.d/
+            {{- end }}
+            - name: replication-config
+              mountPath: /docker-entrypoint-initdb.d/
+            - name: init-scripts-replication
+              mountPath: /tmp
+            {{- with .Values.secondary.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                  - /bin/bash
+                  - -c
+                  - |
+                    # Run simple replication setup in background
+                    nohup /tmp/init-replication.sh > /tmp/replication-setup.log 2>&1 &
+            {{- with .Values.secondary.lifecycleHooks }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+        {{- if .Values.metrics.enabled }}
+        - name: metrics
+          image: {{ include "mysql.metrics.image" . }}
+          imagePullPolicy: {{ .Values.metrics.image.pullPolicy }}
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mysql.secretName" . }}
+                  key: mysql-root-password
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Creating .my.cnf with credentials..."
+              cat > /tmp/.my.cnf << EOF
+              [client]
+              user=root
+              password=${MYSQL_ROOT_PASSWORD}
+              host=127.0.0.1
+              port=3306
+              EOF
+              echo "Starting mysqld_exporter..."
+              exec /bin/mysqld_exporter --config.my-cnf=/tmp/.my.cnf --web.listen-address=":9104" {{ range .Values.metrics.extraArgs.secondary }}{{ . }} {{ end }}
+          ports:
+            - name: metrics
+              containerPort: 9104
+              protocol: TCP
+          {{- if .Values.metrics.livenessProbe.enabled }}
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            initialDelaySeconds: {{ .Values.metrics.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.metrics.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.metrics.livenessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.metrics.livenessProbe.successThreshold }}
+            failureThreshold: {{ .Values.metrics.livenessProbe.failureThreshold }}
+          {{- end }}
+          {{- if .Values.metrics.readinessProbe.enabled }}
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            initialDelaySeconds: {{ .Values.metrics.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.metrics.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.metrics.readinessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.metrics.readinessProbe.successThreshold }}
+            failureThreshold: {{ .Values.metrics.readinessProbe.failureThreshold }}
+          {{- end }}
+          {{- with .Values.metrics.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        {{- end }}
+        {{- with .Values.secondary.sidecars }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      volumes:
+        {{- if (include "mysql.secondary.createConfigmap" .) }}
+        - name: config
+          configMap:
+            name: {{ include "mysql.secondary.fullname" . }}
+        {{- end }}
+        - name: replication-config
+          configMap:
+            name: {{ include "mysql.secondary.fullname" . }}-replication
+            defaultMode: 0755
+        - name: init-scripts-replication
+          emptyDir: {}
+        {{- if not .Values.secondary.persistence.enabled }}
+        - name: data
+          emptyDir: {}
+        {{- end }}
+        {{- with .Values.secondary.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+  {{- if .Values.secondary.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "mysql.selectorLabels" . | nindent 10 }}
+          app.kubernetes.io/component: secondary
+        {{- with .Values.secondary.persistence.annotations }}
+        annotations:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+      spec:
+        accessModes:
+          {{- toYaml .Values.secondary.persistence.accessModes | nindent 10 }}
+        resources:
+          requests:
+            storage: {{ .Values.secondary.persistence.size | quote }}
+        {{- with .Values.secondary.persistence.selector }}
+        selector:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- include "mysql.storageClass" .Values.secondary.persistence | nindent 8 }}
+  {{- end }}
+{{- end }}

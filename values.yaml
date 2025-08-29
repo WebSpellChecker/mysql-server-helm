@@ -1,0 +1,547 @@
+# MySQL Helm Chart - Configuration Values
+# Using official MySQL Docker images
+
+## Global parameters
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
+
+## Architecture configuration
+## Options: standalone, replication
+architecture: standalone
+
+## Image configuration
+image:
+  registry: docker.io
+  repository: mysql
+  tag: "9.4.0"
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+## Authentication parameters
+auth:
+  ## Root password
+  rootPassword: ""
+  ## Name of the database to create
+  database: "mydb"
+  ## Database user to create (in addition to root)
+  username: ""
+  ## Password for the new user
+  password: ""
+  ## MySQL replication user (only used if architecture=replication)
+  replicationUser: "replicator"
+  ## MySQL replication password
+  replicationPassword: ""
+  ## Use existing secret for passwords
+  ## The secret must contain:
+  ## - mysql-root-password
+  ## - mysql-password (if auth.username is set)
+  ## - mysql-replication-password (if architecture=replication)
+  existingSecret: ""
+  ## Use password files instead of environment variables
+  usePasswordFiles: false
+
+## Password Update Job (for updating passwords during upgrades)
+passwordUpdateJob:
+  ## Enable password update job
+  enabled: false
+  ## Previous passwords for validation during update
+  previousPasswords:
+    ## Previous root password
+    rootPassword: ""
+    ## Previous user password
+    password: ""
+    ## Previous replication password
+    replicationPassword: ""
+    ## Use existing secret for previous passwords
+    existingSecret: ""
+  ## Resource requests and limits for the update job
+  resources:
+    limits:
+      cpu: 100m
+      memory: 128Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+
+## Init scripts
+initdbScripts: {}
+  # my_init_script.sh: |
+  #   #!/bin/bash
+  #   echo "Do something."
+  # my_init_script.sql: |
+  #   CREATE DATABASE IF NOT EXISTS mydb2;
+
+## ConfigMap with init scripts
+initdbScriptsConfigMap: ""
+
+## Primary configuration (used when architecture=standalone or architecture=replication)
+primary:
+  ## Name for primary instance
+  name: primary
+  
+  ## MySQL Configuration to be injected as my.cnf
+  configuration: |
+    [mysqld]
+    # Minimal configuration for MySQL 9.x
+    skip-name-resolve
+    datadir=/var/lib/mysql
+    socket=/var/run/mysqld/mysqld.sock
+    port=3306
+    
+    # Basic settings
+    max_connections=151
+    max_allowed_packet=16M
+    
+    # Replication settings for primary
+    log-bin=mysql-bin
+    binlog_format=ROW
+    server-id=1
+    
+    # GTID settings (required for replication with secondary)
+    gtid_mode=ON
+    enforce_gtid_consistency=ON
+    log_replica_updates=ON
+
+  ## Existing ConfigMap with MySQL configuration
+  existingConfigmap: ""
+  
+  ## Container ports
+  containerPorts:
+    mysql: 3306
+  
+  ## Update strategy
+  updateStrategy:
+    type: RollingUpdate
+  
+  ## Pod management policy
+  podManagementPolicy: OrderedReady
+  
+  ## Pod annotations
+  podAnnotations: {}
+  
+  ## Pod labels
+  podLabels: {}
+  
+  ## Pod security context
+  podSecurityContext:
+    enabled: true
+    fsGroup: 999
+    runAsUser: 999
+  
+  ## Container security context
+  containerSecurityContext:
+    enabled: true
+    runAsUser: 999
+    runAsNonRoot: true
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+  
+  ## Resource requests and limits
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+  
+  ## Liveness probe
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 3
+  
+  ## Readiness probe
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 3
+  
+  ## Startup probe
+  startupProbe:
+    enabled: true
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 30
+  
+  ## Persistence configuration
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 8Gi
+    annotations: {}
+    selector: {}
+    existingClaim: ""
+  
+  ## Service configuration
+  service:
+    type: ClusterIP
+    ports:
+      mysql: 3306
+    nodePorts:
+      mysql: ""
+    clusterIP: ""
+    loadBalancerIP: ""
+    loadBalancerSourceRanges: []
+    annotations: {}
+    sessionAffinity: None
+  
+  ## Pod Disruption Budget
+  pdb:
+    create: false
+    minAvailable: 1
+    maxUnavailable: ""
+  
+  ## Extra environment variables
+  extraEnvVars: []
+  extraEnvVarsCM: ""
+  extraEnvVarsSecret: ""
+  
+  ## Command and args overrides
+  command: []
+  args: []
+  
+  ## Lifecycle hooks
+  lifecycleHooks: {}
+  
+  ## Extra volumes
+  extraVolumes: []
+  extraVolumeMounts: []
+  
+  ## Init containers
+  initContainers: []
+  
+  ## Sidecar containers
+  sidecars: []
+  
+  ## Node selection
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+  
+  ## Priority class
+  priorityClassName: ""
+  schedulerName: ""
+  terminationGracePeriodSeconds: 30
+  
+  ## Host aliases
+  hostAliases: []
+
+## Secondary configuration (only used when architecture=replication)
+secondary:
+  ## Name for secondary instances
+  name: secondary
+  
+  ## Number of secondary replicas
+  replicaCount: 1
+  
+  ## MySQL Configuration for secondary
+  configuration: |
+    [mysqld]
+    # Use default caching_sha2_password authentication (MySQL 9.x default)
+    skip-name-resolve
+    explicit_defaults_for_timestamp
+    basedir=/usr
+    datadir=/var/lib/mysql
+    plugin-dir=/usr/lib64/mysql/plugin
+    log-error=
+    pid-file=/var/run/mysqld/mysqld.pid
+    socket=/var/run/mysqld/mysqld.sock
+    port=3306
+    
+    # Explicitly disable skip-networking for secondary to allow external connections
+    skip-networking=0
+    
+    # Custom settings
+    max_connections=151
+    max_allowed_packet=16M
+    
+    # InnoDB
+    innodb_buffer_pool_size=128M
+    
+    # Replication
+    relay-log=mysql-relay-bin
+    log-bin=mysql-bin
+    binlog_format=ROW
+    read_only=1
+    
+    # Server ID must be unique for each server
+    server-id=2
+    
+    # GTID for better replication
+    gtid_mode=ON
+    enforce_gtid_consistency=ON
+    log_replica_updates=ON
+    
+  ## Existing ConfigMap with MySQL configuration
+  existingConfigmap: ""
+  
+  ## Container ports
+  containerPorts:
+    mysql: 3306
+  
+  ## Update strategy
+  updateStrategy:
+    type: RollingUpdate
+  
+  ## Pod management policy
+  podManagementPolicy: OrderedReady
+  
+  ## Pod annotations
+  podAnnotations: {}
+  
+  ## Pod labels
+  podLabels: {}
+  
+  ## Pod security context
+  podSecurityContext:
+    enabled: true
+    fsGroup: 999
+    runAsUser: 999
+  
+  ## Container security context
+  containerSecurityContext:
+    enabled: true
+    runAsUser: 999
+    runAsNonRoot: true
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+  
+  ## Resource requests and limits
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+  
+  ## Liveness probe
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 3
+  
+  ## Readiness probe
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 3
+  
+  ## Startup probe
+  startupProbe:
+    enabled: true
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 30
+  
+  ## Persistence configuration
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 8Gi
+    annotations: {}
+    selector: {}
+  
+  ## Service configuration
+  service:
+    type: ClusterIP
+    ports:
+      mysql: 3306
+    nodePorts:
+      mysql: ""
+    clusterIP: ""
+    loadBalancerIP: ""
+    loadBalancerSourceRanges: []
+    annotations: {}
+    sessionAffinity: None
+  
+  ## Pod Disruption Budget
+  pdb:
+    create: false
+    minAvailable: 1
+    maxUnavailable: ""
+  
+  ## Extra environment variables
+  extraEnvVars: []
+  extraEnvVarsCM: ""
+  extraEnvVarsSecret: ""
+  
+  ## Command and args overrides
+  command: []
+  args: []
+  
+  ## Lifecycle hooks
+  lifecycleHooks: {}
+  
+  ## Extra volumes
+  extraVolumes: []
+  extraVolumeMounts: []
+  
+  ## Init containers
+  initContainers: []
+  
+  ## Sidecar containers
+  sidecars: []
+  
+  ## Node selection
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+  
+  ## Priority class
+  priorityClassName: ""
+  schedulerName: ""
+  terminationGracePeriodSeconds: 30
+  
+  ## Host aliases
+  hostAliases: []
+
+## Service Account
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+  automountServiceAccountToken: false
+
+## RBAC
+rbac:
+  create: true
+  rules: []
+
+## Network Policy
+networkPolicy:
+  enabled: false
+  allowExternal: true
+  explicitNamespacesSelector: {}
+  ingressRules:
+    primaryAccessOnlyFrom:
+      enabled: false
+      namespaceSelector: {}
+      podSelector: {}
+      customRules: []
+
+## Metrics - Prometheus MySQL Exporter
+metrics:
+  enabled: false
+  image:
+    registry: docker.io
+    repository: prom/mysqld-exporter
+    tag: "v0.17.2"
+    pullPolicy: IfNotPresent
+  
+  resources:
+    limits:
+      cpu: 100m
+      memory: 128Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+  
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 3
+  
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 3
+  
+  ## Extra arguments for the mysqld-exporter
+  extraArgs:
+    primary: []
+    secondary: []
+  
+  ## Prometheus ServiceMonitor
+  serviceMonitor:
+    enabled: false
+    namespace: ""
+    interval: 30s
+    scrapeTimeout: 10s
+    labels: {}
+    selector: {}
+    relabelings: []
+    metricRelabelings: []
+    honorLabels: false
+    jobLabel: ""
+  
+  ## Prometheus Rules
+  prometheusRule:
+    enabled: false
+    namespace: ""
+    labels: {}
+    groups: []
+
+## Volume Permissions (for init container to fix permissions)
+volumePermissions:
+  enabled: true
+  image:
+    registry: docker.io
+    repository: busybox
+    tag: "1.36"
+    pullPolicy: IfNotPresent
+  resources:
+    limits:
+      cpu: 100m
+      memory: 128Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+
+## Diagnostic mode
+diagnosticMode:
+  enabled: false
+  command:
+    - sleep
+  args:
+    - infinity
+
+## Common annotations
+commonAnnotations: {}
+
+## Common labels
+commonLabels: {}
+
+## Extra deploy objects
+extraDeploy: []
+
+## Name overrides
+nameOverride: ""
+fullnameOverride: ""
+namespaceOverride: ""
+clusterDomain: cluster.local

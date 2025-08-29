@@ -1,0 +1,62 @@
+{{- if (include "mysql.primary.createConfigmap" .) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mysql.primary.fullname" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "mysql.labels" . | nindent 4 }}
+    app.kubernetes.io/component: primary
+data:
+  my.cnf: |-
+{{ .Values.primary.configuration | indent 4 }}
+{{- end }}
+---
+{{- if eq .Values.architecture "replication" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mysql.primary.fullname" . }}-replication
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "mysql.labels" . | nindent 4 }}
+    app.kubernetes.io/component: primary
+data:
+  setup-replication.sh: |
+    #!/bin/bash
+    set -e
+    
+    echo "Setting up replication user via lifecycle hook..."
+    
+    # Wait for MySQL to be fully started and ready
+    until mysqladmin ping -h127.0.0.1 -uroot -p"${MYSQL_ROOT_PASSWORD}" --silent 2>/dev/null; do
+      echo "Waiting for MySQL to be ready..."
+      sleep 2
+    done
+    
+    # Create replication user
+    # Use default caching_sha2_password authentication (MySQL 9.x default)
+    mysql -h127.0.0.1 -uroot -p"${MYSQL_ROOT_PASSWORD}" <<EOF
+    CREATE USER IF NOT EXISTS '${MYSQL_REPLICATION_USER}'@'%' IDENTIFIED BY '${MYSQL_REPLICATION_PASSWORD}';
+    GRANT REPLICATION SLAVE ON *.* TO '${MYSQL_REPLICATION_USER}'@'%';
+    FLUSH PRIVILEGES;
+    EOF
+    
+    echo "Replication user created successfully"
+{{- end }}
+---
+{{- if .Values.initdbScripts }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mysql.primary.fullname" . }}-init-scripts
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "mysql.labels" . | nindent 4 }}
+    app.kubernetes.io/component: primary
+data:
+{{- range $key, $value := .Values.initdbScripts }}
+  {{ $key }}: |-
+{{ $value | indent 4 }}
+{{- end }}
+{{- end }}

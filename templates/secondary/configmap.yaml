@@ -1,0 +1,84 @@
+{{- if and (eq .Values.architecture "replication") (include "mysql.secondary.createConfigmap" .) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mysql.secondary.fullname" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "mysql.labels" . | nindent 4 }}
+    app.kubernetes.io/component: secondary
+data:
+  my.cnf: |-
+{{ .Values.secondary.configuration | indent 4 }}
+{{- end }}
+---
+{{- if eq .Values.architecture "replication" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mysql.secondary.fullname" . }}-replication
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "mysql.labels" . | nindent 4 }}
+    app.kubernetes.io/component: secondary
+data:
+  setup-replication.sh: |
+    #!/bin/bash
+    set -e
+    
+    echo "Setting up MySQL secondary replication..."
+    
+    # Wait for MySQL to be ready
+    echo "Waiting for MySQL to be ready..."
+    for i in {1..60}; do
+      if mysqladmin ping -h127.0.0.1 -uroot -p"${MYSQL_ROOT_PASSWORD}" --silent 2>/dev/null; then
+        echo "MySQL is ready!"
+        break
+      fi
+      if [ $i -eq 60 ]; then
+        echo "ERROR: MySQL not ready after 5 minutes"
+        exit 1
+      fi
+      sleep 5
+    done
+    
+    # Check if replication is already configured
+    REPLICA_STATUS=$(mysql -h127.0.0.1 -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "SHOW REPLICA STATUS" --skip-column-names --silent 2>/dev/null | wc -l)
+    
+    if [ "$REPLICA_STATUS" -gt "0" ]; then
+      echo "Replication already configured. Checking status..."
+      IO_RUNNING=$(mysql -h127.0.0.1 -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "SHOW REPLICA STATUS" --skip-column-names --silent 2>/dev/null | awk '{print $11}')
+      SQL_RUNNING=$(mysql -h127.0.0.1 -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "SHOW REPLICA STATUS" --skip-column-names --silent 2>/dev/null | awk '{print $12}')
+      if [ "$IO_RUNNING" = "Yes" ] && [ "$SQL_RUNNING" = "Yes" ]; then
+        echo "Replication is running correctly. Exiting."
+        exit 0
+      else
+        echo "Replication configured but not running correctly. Reconfiguring..."
+      fi
+    fi
+    
+    # Configure replication using MySQL 9.4 syntax with SSL
+    echo "Configuring replication..."
+    mysql -h127.0.0.1 -uroot -p"${MYSQL_ROOT_PASSWORD}" <<EOF
+    STOP REPLICA;
+    CHANGE REPLICATION SOURCE TO
+      SOURCE_HOST='${MYSQL_MASTER_HOST}',
+      SOURCE_PORT=${MYSQL_MASTER_PORT},
+      SOURCE_USER='${MYSQL_REPLICATION_USER}',
+      SOURCE_PASSWORD='${MYSQL_REPLICATION_PASSWORD}',
+      SOURCE_SSL=1,
+      SOURCE_AUTO_POSITION=1;
+    START REPLICA;
+    EOF
+    
+    # Verify replication started
+    sleep 2
+    IO_RUNNING=$(mysql -h127.0.0.1 -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "SHOW REPLICA STATUS" --skip-column-names --silent 2>/dev/null | awk '{print $11}')
+    SQL_RUNNING=$(mysql -h127.0.0.1 -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "SHOW REPLICA STATUS" --skip-column-names --silent 2>/dev/null | awk '{print $12}')
+    
+    if [ "$IO_RUNNING" = "Yes" ] && [ "$SQL_RUNNING" = "Yes" ]; then
+      echo "✓ Replication setup completed successfully"
+    else
+      echo "⚠ Replication setup may have issues. IO_RUNNING: $IO_RUNNING, SQL_RUNNING: $SQL_RUNNING"
+    fi
+{{- end }}

@@ -1,0 +1,124 @@
+CHART NAME: {{ .Chart.Name }}
+CHART VERSION: {{ .Chart.Version }}
+APP VERSION: {{ .Chart.AppVersion }}
+
+** Please be patient while the chart is being deployed **
+
+{{- if .Values.diagnosticMode.enabled }}
+The chart has been deployed in diagnostic mode. All probes have been disabled and the command has been overwritten with:
+
+  command: {{- toYaml .Values.diagnosticMode.command | nindent 4 }}
+  args: {{- toYaml .Values.diagnosticMode.args | nindent 4 }}
+
+Get the list of pods by executing:
+
+  kubectl get pods --namespace {{ .Release.Namespace }} -l app.kubernetes.io/instance={{ .Release.Name }}
+
+Access the pod you want to debug by executing:
+
+  kubectl exec --namespace {{ .Release.Namespace }} -ti <NAME OF THE POD> -- bash
+
+{{- else }}
+
+MySQL can be accessed via port {{ .Values.primary.service.ports.mysql }} on the following DNS names from within your cluster:
+
+{{- if eq .Values.architecture "standalone" }}
+  Primary: {{ include "mysql.primary.fullname" . }}.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }}
+{{- else }}
+  Primary (read-write): {{ include "mysql.primary.fullname" . }}.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }}
+  Secondary (read-only): {{ include "mysql.secondary.fullname" . }}.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }}
+{{- end }}
+
+To get your root password run:
+
+    {{- if .Values.auth.existingSecret }}
+    export MYSQL_ROOT_PASSWORD=$(kubectl get secret --namespace {{ .Release.Namespace }} {{ .Values.auth.existingSecret }} -o jsonpath="{.data.mysql-root-password}" | base64 -d)
+    {{- else }}
+    export MYSQL_ROOT_PASSWORD=$(kubectl get secret --namespace {{ .Release.Namespace }} {{ include "mysql.fullname" . }} -o jsonpath="{.data.mysql-root-password}" | base64 -d)
+    {{- end }}
+
+To connect to your database:
+
+1. Run a MySQL client pod:
+
+   kubectl run {{ include "mysql.fullname" . }}-client --rm --tty -i --restart='Never' --image {{ include "mysql.image" . }} --namespace {{ .Release.Namespace }} --env MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD --command -- bash
+
+2. Connect to primary:
+
+   mysql -h {{ include "mysql.primary.fullname" . }}.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }} -uroot -p"$MYSQL_ROOT_PASSWORD"
+
+{{- if eq .Values.architecture "replication" }}
+
+3. Connect to secondary (read-only):
+
+   mysql -h {{ include "mysql.secondary.fullname" . }}.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }} -uroot -p"$MYSQL_ROOT_PASSWORD"
+
+{{- end }}
+
+{{- if .Values.auth.username }}
+
+To connect to your database using the created user:
+
+{{- if .Values.auth.existingSecret }}
+    kubectl get secret --namespace {{ .Release.Namespace }} {{ .Values.auth.existingSecret }} -o jsonpath="{.data.mysql-password}" | base64 -d
+{{- else }}
+    kubectl get secret --namespace {{ .Release.Namespace }} {{ include "mysql.fullname" . }} -o jsonpath="{.data.mysql-password}" | base64 -d
+{{- end }}
+
+Then connect with:
+
+    mysql -h {{ include "mysql.primary.fullname" . }}.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }} -u{{ .Values.auth.username }} -p
+
+{{- end }}
+
+To connect to your database from outside the cluster execute the following commands:
+
+{{- if eq .Values.primary.service.type "NodePort" }}
+
+    export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+    export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "mysql.primary.fullname" . }})
+    mysql -h $NODE_IP -P $NODE_PORT -uroot -p
+
+{{- else if eq .Values.primary.service.type "LoadBalancer" }}
+
+  NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+        Watch the status with: 'kubectl get svc --namespace {{ .Release.Namespace }} -w {{ include "mysql.primary.fullname" . }}'
+
+    export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "mysql.primary.fullname" . }} --template "{{ "{{ range (index .status.loadBalancer.ingress 0) }}{{ . }}{{ end }}" }}")
+    mysql -h $SERVICE_IP -P {{ .Values.primary.service.ports.mysql }} -uroot -p
+
+{{- else if eq .Values.primary.service.type "ClusterIP" }}
+
+    kubectl port-forward --namespace {{ .Release.Namespace }} svc/{{ include "mysql.primary.fullname" . }} {{ .Values.primary.service.ports.mysql }}:{{ .Values.primary.service.ports.mysql }} &
+    mysql -h 127.0.0.1 -P {{ .Values.primary.service.ports.mysql }} -uroot -p
+
+{{- end }}
+
+{{- if .Values.metrics.enabled }}
+
+To access the Prometheus metrics:
+
+    Primary metrics:
+    kubectl port-forward --namespace {{ .Release.Namespace }} svc/{{ include "mysql.primary.fullname" . }} 9104:9104 &
+    curl http://127.0.0.1:9104/metrics
+
+{{- if eq .Values.architecture "replication" }}
+    Secondary metrics:
+    kubectl port-forward --namespace {{ .Release.Namespace }} svc/{{ include "mysql.secondary.fullname" . }} 9104:9104 &
+    curl http://127.0.0.1:9104/metrics
+{{- end }}
+
+{{- end }}
+
+{{- if eq .Values.architecture "replication" }}
+
+REPLICATION STATUS:
+
+To check the replication status on secondary nodes:
+
+    kubectl exec -it {{ include "mysql.secondary.fullname" . }}-0 --namespace {{ .Release.Namespace }} -- mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "SHOW REPLICA STATUS"
+
+{{- end }}
+
+{{- include "mysql.validateValues" . }}
+{{- end }}

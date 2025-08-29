@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mysql.primary.fullname" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "mysql.labels" . | nindent 4 }}
+    app.kubernetes.io/component: primary
+  {{- with .Values.primary.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.primary.service.type }}
+  {{- if and .Values.primary.service.clusterIP (eq .Values.primary.service.type "ClusterIP") }}
+  clusterIP: {{ .Values.primary.service.clusterIP }}
+  {{- end }}
+  {{- if and .Values.primary.service.loadBalancerIP (eq .Values.primary.service.type "LoadBalancer") }}
+  loadBalancerIP: {{ .Values.primary.service.loadBalancerIP }}
+  {{- end }}
+  {{- if and (eq .Values.primary.service.type "LoadBalancer") .Values.primary.service.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges:
+    {{- toYaml .Values.primary.service.loadBalancerSourceRanges | nindent 4 }}
+  {{- end }}
+  {{- if .Values.primary.service.sessionAffinity }}
+  sessionAffinity: {{ .Values.primary.service.sessionAffinity }}
+  {{- end }}
+  ports:
+    - name: mysql
+      port: {{ .Values.primary.service.ports.mysql }}
+      targetPort: mysql
+      protocol: TCP
+      {{- if and (eq .Values.primary.service.type "NodePort") .Values.primary.service.nodePorts.mysql }}
+      nodePort: {{ .Values.primary.service.nodePorts.mysql }}
+      {{- end }}
+    {{- if .Values.metrics.enabled }}
+    - name: metrics
+      port: 9104
+      targetPort: metrics
+      protocol: TCP
+    {{- end }}
+  selector:
+    {{- include "mysql.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: primary
+---
+# Headless service for StatefulSet DNS
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mysql.primary.fullname" . }}-headless
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "mysql.labels" . | nindent 4 }}
+    app.kubernetes.io/component: primary
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  ports:
+    - name: mysql
+      port: {{ .Values.primary.service.ports.mysql }}
+      targetPort: mysql
+      protocol: TCP
+  selector:
+    {{- include "mysql.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: primary

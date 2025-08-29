@@ -1,0 +1,67 @@
+{{- if eq .Values.architecture "replication" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mysql.secondary.fullname" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "mysql.labels" . | nindent 4 }}
+    app.kubernetes.io/component: secondary
+  {{- with .Values.secondary.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.secondary.service.type }}
+  {{- if and .Values.secondary.service.clusterIP (eq .Values.secondary.service.type "ClusterIP") }}
+  clusterIP: {{ .Values.secondary.service.clusterIP }}
+  {{- end }}
+  {{- if and .Values.secondary.service.loadBalancerIP (eq .Values.secondary.service.type "LoadBalancer") }}
+  loadBalancerIP: {{ .Values.secondary.service.loadBalancerIP }}
+  {{- end }}
+  {{- if and (eq .Values.secondary.service.type "LoadBalancer") .Values.secondary.service.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges:
+    {{- toYaml .Values.secondary.service.loadBalancerSourceRanges | nindent 4 }}
+  {{- end }}
+  {{- if .Values.secondary.service.sessionAffinity }}
+  sessionAffinity: {{ .Values.secondary.service.sessionAffinity }}
+  {{- end }}
+  ports:
+    - name: mysql
+      port: {{ .Values.secondary.service.ports.mysql }}
+      targetPort: mysql
+      protocol: TCP
+      {{- if and (eq .Values.secondary.service.type "NodePort") .Values.secondary.service.nodePorts.mysql }}
+      nodePort: {{ .Values.secondary.service.nodePorts.mysql }}
+      {{- end }}
+    {{- if .Values.metrics.enabled }}
+    - name: metrics
+      port: 9104
+      targetPort: metrics
+      protocol: TCP
+    {{- end }}
+  selector:
+    {{- include "mysql.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: secondary
+---
+# Headless service for StatefulSet DNS
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mysql.secondary.fullname" . }}-headless
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "mysql.labels" . | nindent 4 }}
+    app.kubernetes.io/component: secondary
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  ports:
+    - name: mysql
+      port: {{ .Values.secondary.service.ports.mysql }}
+      targetPort: mysql
+      protocol: TCP
+  selector:
+    {{- include "mysql.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: secondary
+{{- end }}

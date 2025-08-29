@@ -1,0 +1,43 @@
+{{- if .Values.primary.pdb.create }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "mysql.primary.fullname" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "mysql.labels" . | nindent 4 }}
+    app.kubernetes.io/component: primary
+spec:
+  {{- if .Values.primary.pdb.minAvailable }}
+  minAvailable: {{ .Values.primary.pdb.minAvailable }}
+  {{- end }}
+  {{- if .Values.primary.pdb.maxUnavailable }}
+  maxUnavailable: {{ .Values.primary.pdb.maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "mysql.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: primary
+{{- end }}
+---
+{{- if and (eq .Values.architecture "replication") .Values.secondary.pdb.create }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "mysql.secondary.fullname" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "mysql.labels" . | nindent 4 }}
+    app.kubernetes.io/component: secondary
+spec:
+  {{- if .Values.secondary.pdb.minAvailable }}
+  minAvailable: {{ .Values.secondary.pdb.minAvailable }}
+  {{- end }}
+  {{- if .Values.secondary.pdb.maxUnavailable }}
+  maxUnavailable: {{ .Values.secondary.pdb.maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "mysql.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: secondary
+{{- end }}
