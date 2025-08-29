@@ -1724,7 +1724,7 @@ backup:
 
 | Chart version | App version | Release date | Changes                           |
 |---------------|-------------|--------------|-----------------------------------|
-| 1.0.0         | 9.4.0       | 2025-01-01   | Initial release with MySQL 9.4.0 |
+| 1.0.0         | 9.4.0       | 2025-08-28   | Initial release with MySQL 9.4.0 |
 
 ### Support matrix
 
