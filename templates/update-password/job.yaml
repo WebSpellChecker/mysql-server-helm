@@ -1,0 +1,235 @@
+{{- if .Values.passwordUpdateJob.enabled }}
+{{- $fullName := include "mysql.fullname" . -}}
+{{- $secretName := include "mysql.secretName" . -}}
+{{- $serviceAccountName := include "mysql.serviceAccountName" . -}}
+{{- $namespace := .Release.Namespace -}}
+{{- $previousSecret := lookup "v1" "Secret" $namespace $secretName -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $fullName }}-password-update-{{ randAlphaNum 5 | lower }}
+  namespace: {{ $namespace }}
+  labels: {{- include "mysql.labels" . | nindent 4 }}
+    app.kubernetes.io/component: password-update
+  annotations:
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    # "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels: {{- include "mysql.labels" . | nindent 8 }}
+        app.kubernetes.io/component: password-update
+    spec:
+      serviceAccountName: {{ $serviceAccountName }}
+      restartPolicy: OnFailure
+      {{- if .Values.passwordUpdateJob.nodeSelector }}
+      nodeSelector: {{- toYaml .Values.passwordUpdateJob.nodeSelector | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: mysql-password-update
+        image: {{ include "mysql.image" . }}
+        imagePullPolicy: {{ .Values.image.pullPolicy | quote }}
+        command:
+        - /bin/bash
+        - -ec
+        - |
+          set -o errexit
+          set -o nounset
+          set -o pipefail
+
+          echo "===== MySQL Password Update Job Started ====="
+          echo "Timestamp: $(date)"
+          echo "Job is running as a pre-upgrade hook"
+          echo "Passwords are provided via explicit values, not from secrets"
+          
+          # Function to connect to MySQL with error handling
+          mysql_connect() {
+            local password="$1"
+            shift
+            mysql -h{{ $fullName }}-primary -uroot -p"${password}" --connect-timeout=5 "$@" 2>&1
+          }
+
+          # Function to execute SQL quietly
+          mysql_exec() {
+            local password="$1"
+            shift
+            mysql -h{{ $fullName }}-primary -uroot -p"${password}" --connect-timeout=5 -e "$@" 2>/dev/null
+          }
+
+          # Get passwords
+          echo "Debug: Environment variables:"
+          echo "  MYSQL_NEW_ROOT_PASSWORD is set: $([ -n "${MYSQL_NEW_ROOT_PASSWORD}" ] && echo YES || echo NO)"
+          echo "  MYSQL_PREVIOUS_ROOT_PASSWORD is set: $([ -n "${MYSQL_PREVIOUS_ROOT_PASSWORD}" ] && echo YES || echo NO)"
+          
+          # Use explicitly provided passwords
+          {{- if not .Values.passwordUpdateJob.previousPasswords.rootPassword }}
+          echo "ERROR: passwordUpdateJob.previousPasswords.rootPassword is required"
+          echo "Please set it to your current root password"
+          exit 1
+          {{- end }}
+          
+          {{- if not .Values.auth.rootPassword }}
+          echo "ERROR: auth.rootPassword is required for password update"
+          echo "Please set it to your new root password"
+          exit 1
+          {{- end }}
+
+          # Wait for MySQL to be ready
+          echo "Waiting for MySQL primary to be ready..."
+          RETRY_COUNT=60
+          RETRY_DELAY=5
+          
+          for i in $(seq 1 $RETRY_COUNT); do
+            if mysql_exec "${MYSQL_PREVIOUS_ROOT_PASSWORD}" "SELECT 1" >/dev/null 2>&1; then
+              echo "✓ Primary is ready and accepting connections"
+              break
+            fi
+            
+            if [ $i -eq $RETRY_COUNT ]; then
+              echo "ERROR: MySQL not ready after $((RETRY_COUNT * RETRY_DELAY)) seconds"
+              echo "Last connection attempt output:"
+              mysql_connect "${MYSQL_PREVIOUS_ROOT_PASSWORD}" -e "SELECT 1" || true
+              exit 1
+            fi
+            echo "  Waiting... (attempt $i/$RETRY_COUNT)"
+            sleep $RETRY_DELAY
+          done
+
+          # Double-check we can connect with previous password
+          echo "Verifying connection with previous password..."
+          if ! mysql_exec "${MYSQL_PREVIOUS_ROOT_PASSWORD}" "SELECT 1"; then
+            echo "ERROR: Cannot connect with previous password"
+            exit 1
+          fi
+          echo "✓ Connected successfully with previous password"
+
+          # Check if password update is needed
+          echo "Checking if password update is required..."
+          if mysql_exec "${MYSQL_NEW_ROOT_PASSWORD}" "SELECT 1" >/dev/null 2>&1; then
+            echo "✓ New password already works. Ensuring all root users are in sync."
+          else
+            echo "Password update is required. Proceeding..."
+          fi
+
+          # Atomically update all root users to be safe.
+          # This is idempotent and ensures both localhost (for probes) and % (for clients) are correct.
+          echo "Updating password for 'root'@'%' and 'root'@'localhost'..."
+          if ! mysql_connect "${MYSQL_PREVIOUS_ROOT_PASSWORD}" -e "ALTER USER 'root'@'%' IDENTIFIED BY '${MYSQL_NEW_ROOT_PASSWORD}'; ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_NEW_ROOT_PASSWORD}'; FLUSH PRIVILEGES;"; then
+            echo "Initial update with old password failed. Trying with new password in case it was already partially updated..."
+            if ! mysql_connect "${MYSQL_NEW_ROOT_PASSWORD}" -e "ALTER USER 'root'@'%' IDENTIFIED BY '${MYSQL_NEW_ROOT_PASSWORD}'; ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_NEW_ROOT_PASSWORD}'; FLUSH PRIVILEGES;"; then
+              echo "❌ ERROR: Failed to update root passwords with either old or new credentials."
+              exit 1
+            fi
+          fi
+          echo "✓ Root passwords updated successfully."
+
+          # Flush privileges to ensure changes take effect
+          echo "Flushing privileges..."
+          if mysql_exec "${MYSQL_PREVIOUS_ROOT_PASSWORD}" "FLUSH PRIVILEGES;" 2>/dev/null; then
+            echo "✓ Privileges flushed with old password"
+          elif mysql_exec "${MYSQL_NEW_ROOT_PASSWORD}" "FLUSH PRIVILEGES;" 2>/dev/null; then
+            echo "✓ Privileges flushed with new password"
+          else
+            echo "WARNING: Could not flush privileges"
+          fi
+
+          # Wait a moment for changes to propagate
+          sleep 3
+
+          # Verify the password was updated successfully
+          echo "Verifying password update..."
+          MAX_VERIFY_ATTEMPTS=10
+
+          for i in $(seq 1 $MAX_VERIFY_ATTEMPTS); do
+            # Test that new password works
+            if mysql -h{{ $fullName }}-primary -uroot -p"${MYSQL_NEW_ROOT_PASSWORD}" --connect-timeout=5 -e "SELECT 1" >/dev/null 2>&1; then
+              echo "✓ New password is active"
+
+              # Check if old password still works (may happen briefly due to caching)
+              if mysql -h{{ $fullName }}-primary -uroot -p"${MYSQL_PREVIOUS_ROOT_PASSWORD}" --connect-timeout=5 -e "SELECT 1" >/dev/null 2>&1; then
+                echo "WARNING: Old password still works (transient). Proceeding because new password is active."
+              fi
+
+              # Success: new password works (we accept transient old-password acceptance)
+              break
+            fi
+
+            if [ $i -eq $MAX_VERIFY_ATTEMPTS ]; then
+              echo "ERROR: New password did not become active after $MAX_VERIFY_ATTEMPTS attempts"
+              echo "Diagnostic info:"
+              echo -n "  Old password: "
+              mysql -h{{ $fullName }}-primary -uroot -p"${MYSQL_PREVIOUS_ROOT_PASSWORD}" -e "SELECT 1" >/dev/null 2>&1 && echo "STILL WORKS" || echo "Denied"
+              echo -n "  New password: "
+              mysql -h{{ $fullName }}-primary -uroot -p"${MYSQL_NEW_ROOT_PASSWORD}" -e "SELECT 1" >/dev/null 2>&1 && echo "Works" || echo "DOESN'T WORK"
+              exit 1
+            fi
+
+            echo "  Verification attempt $i/$MAX_VERIFY_ATTEMPTS failed. Retrying..."
+            sleep 2
+          done
+
+          {{- if and .Values.auth.username .Values.auth.password }}
+          echo "Updating user password for '{{ .Values.auth.username }}'..."
+          if mysql_exec "${MYSQL_NEW_ROOT_PASSWORD}" \
+            "ALTER USER '{{ .Values.auth.username }}'@'%' IDENTIFIED BY '${MYSQL_NEW_PASSWORD}';" 2>/dev/null; then
+            echo "✓ User password updated"
+          else
+            echo "⚠ User '{{ .Values.auth.username }}' might not exist yet (will be created on pod restart)"
+          fi
+          {{- end }}
+
+          {{- if eq .Values.architecture "replication" }}
+          {{- if .Values.auth.replicationPassword }}
+          echo "Updating replication user password..."
+          # Use default authentication method (caching_sha2_password in MySQL 9.x)
+          if mysql_exec "${MYSQL_NEW_ROOT_PASSWORD}" \
+            "ALTER USER '{{ .Values.auth.replicationUser }}'@'%' IDENTIFIED BY '${MYSQL_NEW_REPLICATION_PASSWORD}';" 2>/dev/null; then
+            echo "✓ Replication password updated"
+          else
+            echo "⚠ Replication user might not exist yet (will be created on pod restart)"
+          fi
+          {{- end }}
+          {{- end }}
+
+          echo ""
+          echo "===== Password Update Completed Successfully ====="
+          echo "The StatefulSet will perform a rolling update automatically."
+          echo "Timestamp: $(date)"
+          echo "====================================="
+
+        env:
+        # IMPORTANT: We use explicit values, not secret references
+        # because the secret is updated BEFORE the pre-upgrade hook runs
+        - name: MYSQL_NEW_ROOT_PASSWORD
+          value: {{ required "auth.rootPassword is required when passwordUpdateJob.enabled=true" .Values.auth.rootPassword | quote }}
+        - name: MYSQL_PREVIOUS_ROOT_PASSWORD
+          value: {{ required "passwordUpdateJob.previousPasswords.rootPassword is required" .Values.passwordUpdateJob.previousPasswords.rootPassword | quote }}
+        {{- if and .Values.auth.username .Values.auth.password }}
+        - name: MYSQL_NEW_PASSWORD
+          value: {{ .Values.auth.password | quote }}
+        {{- if .Values.passwordUpdateJob.previousPasswords.password }}
+        - name: MYSQL_PREVIOUS_PASSWORD
+          value: {{ .Values.passwordUpdateJob.previousPasswords.password | quote }}
+        {{- end }}
+        {{- end }}
+        {{- if eq .Values.architecture "replication" }}
+        {{- if .Values.auth.replicationPassword }}
+        - name: MYSQL_NEW_REPLICATION_PASSWORD
+          value: {{ .Values.auth.replicationPassword | quote }}
+        {{- if .Values.passwordUpdateJob.previousPasswords.replicationPassword }}
+        - name: MYSQL_PREVIOUS_REPLICATION_PASSWORD
+          value: {{ .Values.passwordUpdateJob.previousPasswords.replicationPassword | quote }}
+        {{- end }}
+        {{- end }}
+        {{- end }}
+        resources: {{- toYaml .Values.passwordUpdateJob.resources | nindent 10 }}
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir: {}
+{{- end }}

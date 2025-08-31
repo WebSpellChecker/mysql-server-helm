@@ -1,0 +1,126 @@
+{{- if and .Values.metrics.enabled .Values.metrics.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "mysql.fullname" . }}
+  {{- if .Values.metrics.prometheusRule.namespace }}
+  namespace: {{ .Values.metrics.prometheusRule.namespace | quote }}
+  {{- else }}
+  namespace: {{ .Release.Namespace | quote }}
+  {{- end }}
+  labels:
+    {{- include "mysql.labels" . | nindent 4 }}
+    {{- if .Values.metrics.prometheusRule.labels }}
+    {{- toYaml .Values.metrics.prometheusRule.labels | nindent 4 }}
+    {{- end }}
+spec:
+  {{- if .Values.metrics.prometheusRule.groups }}
+  groups:
+    {{- toYaml .Values.metrics.prometheusRule.groups | nindent 4 }}
+  {{- else }}
+  # Default alerting rules for MySQL
+  groups:
+    - name: {{ include "mysql.fullname" . }}.rules
+      interval: 30s
+      rules:
+        - alert: MySQLDown
+          expr: mysql_up{service="{{ include "mysql.primary.fullname" . }}"} == 0
+          for: 5m
+          labels:
+            severity: critical
+            component: mysql
+          annotations:
+            summary: "MySQL instance {{ "{{ $labels.instance }}" }} is down"
+            description: "MySQL instance {{ "{{ $labels.instance }}" }} has been down for more than 5 minutes."
+        
+        - alert: MySQLTooManyConnections
+          expr: mysql_global_status_threads_connected / mysql_global_variables_max_connections * 100 > 80
+          for: 5m
+          labels:
+            severity: warning
+            component: mysql
+          annotations:
+            summary: "MySQL too many connections on {{ "{{ $labels.instance }}" }}"
+            description: "More than 80% of MySQL connections are in use on {{ "{{ $labels.instance }}" }}. Current value: {{ "{{ $value }}" }}%"
+        
+        - alert: MySQLSlowQueries
+          expr: rate(mysql_global_status_slow_queries{job="{{ include "mysql.fullname" . }}"}[5m]) > 0.05
+          for: 10m
+          labels:
+            severity: warning
+            component: mysql
+          annotations:
+            summary: "MySQL slow queries on {{ "{{ $labels.instance }}" }}"
+            description: "MySQL is having {{ "{{ $value }}" }} slow queries per second on {{ "{{ $labels.instance }}" }}"
+        
+        - alert: MySQLInnoDBLogWaits
+          expr: rate(mysql_global_status_innodb_log_waits{job="{{ include "mysql.fullname" . }}"}[15m]) > 10
+          for: 5m
+          labels:
+            severity: warning
+            component: mysql
+          annotations:
+            summary: "MySQL InnoDB log waits on {{ "{{ $labels.instance }}" }}"
+            description: "MySQL InnoDB log writes are stalling on {{ "{{ $labels.instance }}" }}. Rate: {{ "{{ $value }}" }}"
+        
+        - alert: MySQLRestarted
+          expr: mysql_global_status_uptime{job="{{ include "mysql.fullname" . }}"} < 60
+          for: 0m
+          labels:
+            severity: info
+            component: mysql
+          annotations:
+            summary: "MySQL restarted on {{ "{{ $labels.instance }}" }}"
+            description: "MySQL has been restarted on {{ "{{ $labels.instance }}" }}. Uptime: {{ "{{ $value }}" }} seconds"
+        
+        - alert: MySQLHighQPS
+          expr: rate(mysql_global_status_queries{job="{{ include "mysql.fullname" . }}"}[5m]) > 1000
+          for: 5m
+          labels:
+            severity: warning
+            component: mysql
+          annotations:
+            summary: "MySQL high QPS on {{ "{{ $labels.instance }}" }}"
+            description: "MySQL is handling {{ "{{ $value }}" }} queries per second on {{ "{{ $labels.instance }}" }}"
+        
+        - alert: MySQLHighThreadsRunning
+          expr: mysql_global_status_threads_running{job="{{ include "mysql.fullname" . }}"} > 50
+          for: 5m
+          labels:
+            severity: warning
+            component: mysql
+          annotations:
+            summary: "MySQL high threads running on {{ "{{ $labels.instance }}" }}"
+            description: "MySQL has {{ "{{ $value }}" }} threads running on {{ "{{ $labels.instance }}" }}"
+        
+        - alert: MySQLInnoDBBufferPoolUtilization
+          expr: (1 - (mysql_global_status_innodb_buffer_pool_pages_free{job="{{ include "mysql.fullname" . }}"} / mysql_global_status_innodb_buffer_pool_pages_total{job="{{ include "mysql.fullname" . }}"})) * 100 > 95
+          for: 10m
+          labels:
+            severity: warning
+            component: mysql
+          annotations:
+            summary: "MySQL InnoDB buffer pool high utilization on {{ "{{ $labels.instance }}" }}"
+            description: "MySQL InnoDB buffer pool utilization is {{ "{{ $value }}" }}% on {{ "{{ $labels.instance }}" }}"
+        
+        - alert: MySQLTableLockWaits
+          expr: rate(mysql_global_status_table_locks_waited{job="{{ include "mysql.fullname" . }}"}[5m]) > 1
+          for: 10m
+          labels:
+            severity: warning
+            component: mysql
+          annotations:
+            summary: "MySQL table lock waits on {{ "{{ $labels.instance }}" }}"
+            description: "MySQL has {{ "{{ $value }}" }} table lock waits per second on {{ "{{ $labels.instance }}" }}"
+        
+        - alert: MySQLAbortedConnections
+          expr: rate(mysql_global_status_aborted_connects{job="{{ include "mysql.fullname" . }}"}[5m]) > 0.1
+          for: 10m
+          labels:
+            severity: warning
+            component: mysql
+          annotations:
+            summary: "MySQL aborted connections on {{ "{{ $labels.instance }}" }}"
+            description: "MySQL has {{ "{{ $value }}" }} aborted connections per second on {{ "{{ $labels.instance }}" }}"
+  {{- end }}
+{{- end }}
