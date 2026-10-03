@@ -1,0 +1,20 @@
+# Known placeholder passwords in documentation examples (not real secrets).
+# Gitleaks reports them as hashicorp-tf-password. One fingerprint per finding.
+399ecb231912f748e6fe5b7602f1ba71daa6b1f1:docs/prometheus-monitoring-guide.md:hashicorp-tf-password:68
+399ecb231912f748e6fe5b7602f1ba71daa6b1f1:docs/prometheus-monitoring-guide.md:hashicorp-tf-password:157
+399ecb231912f748e6fe5b7602f1ba71daa6b1f1:docs/prometheus-monitoring-guide.md:hashicorp-tf-password:160
+399ecb231912f748e6fe5b7602f1ba71daa6b1f1:docs/prometheus-monitoring-guide.md:hashicorp-tf-password:162
+399ecb231912f748e6fe5b7602f1ba71daa6b1f1:README.md:hashicorp-tf-password:1348
+399ecb231912f748e6fe5b7602f1ba71daa6b1f1:README.md:hashicorp-tf-password:1349
+399ecb231912f748e6fe5b7602f1ba71daa6b1f1:README.md:hashicorp-tf-password:1570
+399ecb231912f748e6fe5b7602f1ba71daa6b1f1:README.md:hashicorp-tf-password:1604
+399ecb231912f748e6fe5b7602f1ba71daa6b1f1:README.md:hashicorp-tf-password:1605
+419d638ad4858b1f08346f0a82edf6fc37c636bc:docs/prometheus-monitoring-guide.md:hashicorp-tf-password:68
+419d638ad4858b1f08346f0a82edf6fc37c636bc:docs/prometheus-monitoring-guide.md:hashicorp-tf-password:157
+419d638ad4858b1f08346f0a82edf6fc37c636bc:docs/prometheus-monitoring-guide.md:hashicorp-tf-password:160
+419d638ad4858b1f08346f0a82edf6fc37c636bc:docs/prometheus-monitoring-guide.md:hashicorp-tf-password:162
+419d638ad4858b1f08346f0a82edf6fc37c636bc:README.md:hashicorp-tf-password:1348
+419d638ad4858b1f08346f0a82edf6fc37c636bc:README.md:hashicorp-tf-password:1349
+419d638ad4858b1f08346f0a82edf6fc37c636bc:README.md:hashicorp-tf-password:1570
+419d638ad4858b1f08346f0a82edf6fc37c636bc:README.md:hashicorp-tf-password:1604
+419d638ad4858b1f08346f0a82edf6fc37c636bc:README.md:hashicorp-tf-password:1605

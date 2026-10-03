@@ -138,7 +138,7 @@ metrics:
 
 ```bash
 # Install MySQL with metrics enabled
-helm install my-mysql ./mysql-server-helm \
+helm install my-mysql ./mysql-server-helm/mysql \
   -f mysql-metrics-values.yaml
 
 # Verify pods are running
@@ -297,7 +297,7 @@ volumePermissions:
 
 ```bash
 # Deploy with advanced configuration
-helm install my-mysql-prod ./mysql-server-helm \
+helm install my-mysql-prod ./mysql-server-helm/mysql \
   -f mysql-metrics-replication.yaml \
   --namespace production \
   --create-namespace

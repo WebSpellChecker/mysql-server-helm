@@ -14,10 +14,10 @@
 
 ```bash
 # Install with auto-generated passwords
-helm install my-mysql ./mysql-server-helm
+helm install my-mysql ./mysql-server-helm/mysql
 
 # Install with custom passwords
-helm install my-mysql ./mysql-server-helm \
+helm install my-mysql ./mysql-server-helm/mysql \
   --set auth.rootPassword=myRootPassword \
   --set auth.database=myapp \
   --set auth.username=myuser \
@@ -27,7 +27,7 @@ helm install my-mysql ./mysql-server-helm \
 #### Replication Mode
 
 ```bash
-helm install my-mysql ./mysql-server-helm \
+helm install my-mysql ./mysql-server-helm/mysql \
   --set architecture=replication \
   --set auth.rootPassword=myRootPassword \
   --set auth.replicationPassword=myReplPassword \
@@ -91,7 +91,7 @@ kubectl exec my-mysql-secondary-0 -- mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "S
 ### Production Installation
 
 ```bash
-helm install production-mysql ./mysql-server-helm \
+helm install production-mysql ./mysql-server-helm/mysql \
   --namespace production \
   --create-namespace \
   --set architecture=replication \
@@ -114,7 +114,7 @@ helm install production-mysql ./mysql-server-helm \
 ### Development Installation
 
 ```bash
-helm install dev-mysql ./mysql-server-helm \
+helm install dev-mysql ./mysql-server-helm/mysql \
   --namespace development \
   --create-namespace \
   --set architecture=standalone \
@@ -133,14 +133,14 @@ kubectl create configmap mysql-init-scripts \
   --from-file=setup.sh=./my-setup.sh
 
 # Install with init scripts
-helm install my-mysql ./mysql-server-helm \
+helm install my-mysql ./mysql-server-helm/mysql \
   --set initdbScriptsConfigMap=mysql-init-scripts
 ```
 
 ### Using Existing PVC
 
 ```bash
-helm install my-mysql ./mysql-server-helm \
+helm install my-mysql ./mysql-server-helm/mysql \
   --set primary.persistence.existingClaim=my-existing-pvc
 ```
 
@@ -158,7 +158,7 @@ kubectl get pvc
 kubectl get storageclass
 
 # Install with specific storage class
-helm install my-mysql ./mysql-server-helm \
+helm install my-mysql ./mysql-server-helm/mysql \
   --set primary.persistence.storageClass=standard
 ```
 
@@ -259,7 +259,7 @@ kubectl delete namespace <namespace-name>
 helm get values my-mysql > current-values.yaml
 
 # Perform upgrade
-helm upgrade my-mysql ./mysql-server-helm \
+helm upgrade my-mysql ./mysql-server-helm/mysql \
   -f current-values.yaml \
   --set image.tag=9.3.0
 

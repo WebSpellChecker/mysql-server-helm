@@ -1,0 +1,9 @@
+# Metrics exporter, ServiceMonitor, PrometheusRule, and NetworkPolicy.
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+  prometheusRule:
+    enabled: true
+networkPolicy:
+  enabled: true

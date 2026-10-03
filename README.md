@@ -112,27 +112,37 @@ architecture: replication
 
 ```
 mysql-server-helm/
-├── templates/
-│   ├── _helpers.tpl               # Template helper functions
-│   ├── NOTES.txt                  # Post-installation notes
-│   ├── secrets.yaml               # Password management
-│   ├── serviceaccount.yaml        # Service account
-│   ├── role.yaml                  # RBAC role
-│   ├── rolebinding.yaml           # RBAC binding
-│   ├── networkpolicy.yaml         # Network policies
-│   ├── poddisruptionbudget.yaml   # PDB configuration
-│   ├── servicemonitor.yaml        # Prometheus monitoring
-│   ├── prometheusrule.yaml        # Alert rules
-│   ├── primary/
-│   │   ├── statefulset.yaml       # Primary MySQL StatefulSet
-│   │   ├── svc.yaml               # Primary services
-│   │   └── configmap.yaml         # Primary configuration
-│   ├── secondary/
-│   │   ├── statefulset.yaml       # Secondary MySQL StatefulSet
-│   │   ├── svc.yaml               # Secondary services
-│   │   └── configmap.yaml         # Secondary configuration
-│   └── tests/
-│       └── test-connection.yaml    # Helm test
+├── mysql/                           # The chart
+│   ├── Chart.yaml
+│   ├── values.yaml
+│   └── templates/
+│       ├── _helpers.tpl               # Template helper functions
+│       ├── NOTES.txt                  # Post-installation notes
+│       ├── secrets.yaml               # Password management
+│       ├── serviceaccount.yaml        # Service account
+│       ├── role.yaml                  # RBAC role
+│       ├── rolebinding.yaml           # RBAC binding
+│       ├── networkpolicy.yaml         # Network policies
+│       ├── poddisruptionbudget.yaml   # PDB configuration
+│       ├── servicemonitor.yaml        # Prometheus monitoring
+│       ├── prometheusrule.yaml        # Alert rules
+│       ├── primary/
+│       │   ├── statefulset.yaml       # Primary MySQL StatefulSet
+│       │   ├── svc.yaml               # Primary services
+│       │   └── configmap.yaml         # Primary configuration
+│       ├── secondary/
+│       │   ├── statefulset.yaml       # Secondary MySQL StatefulSet
+│       │   ├── svc.yaml               # Secondary services
+│       │   └── configmap.yaml         # Secondary configuration
+│       ├── update-password/
+│       │   ├── job.yaml               # Password update Job
+│       │   ├── new-secret.yaml
+│       │   └── previous-secret.yaml
+│       └── tests/
+│           └── test-connection.yaml    # Helm test
+├── docs/                            # Guides
+├── scripts/                         # Validation scripts
+└── README.md
 ```
 
 ---
@@ -158,7 +168,7 @@ mysql-server-helm/
 
 ```bash
 # Standalone mode with defaults
-helm install my-mysql ./mysql-server-helm
+helm install my-mysql ./mysql-server-helm/mysql
 
 # Get root password
 kubectl get secret my-mysql -o jsonpath="{.data.mysql-root-password}" | base64 -d
@@ -218,7 +228,7 @@ volumePermissions:
 EOF
 
 # Install
-helm install mysql-prod ./mysql-server-helm \
+helm install mysql-prod ./mysql-server-helm/mysql \
   --namespace production \
   -f production-values.yaml
 ```
@@ -756,7 +766,7 @@ primary:
 #### Auto-generated passwords
 ```bash
 # Passwords are auto-generated if not specified
-helm install my-mysql ./mysql-server-helm
+helm install my-mysql ./mysql-server-helm/mysql
 
 # Retrieve auto-generated password
 kubectl get secret my-mysql -o jsonpath="{.data.mysql-root-password}" | base64 -d
@@ -771,7 +781,7 @@ kubectl create secret generic mysql-passwords \
   --from-literal=mysql-replication-password=myReplPassword
 
 # Use in installation
-helm install my-mysql ./mysql-server-helm \
+helm install my-mysql ./mysql-server-helm/mysql \
   --set auth.existingSecret=mysql-passwords
 ```
 
@@ -798,20 +808,20 @@ passwordUpdateJob:
 EOF
 
 # Perform upgrade with new passwords
-helm upgrade my-mysql ./mysql-server-helm \
+helm upgrade my-mysql ./mysql-server-helm/mysql \
   --reuse-values \
   -f password-update-values.yaml
 
 # Or you can use --set to re-apply the changes
 # architecture: standalone
-helm upgrade --install my-mysql ./mysql-server-helm \
+helm upgrade --install my-mysql ./mysql-server-helm/mysql \
   --set architecture=standalone \
   --set passwordUpdateJob.enabled=true \
   --set auth.rootPassword=newpass456 \
   --set passwordUpdateJob.previousPasswords.rootPassword=testroot123
 
 # architecture: replication
-helm upgrade --install my-mysql ./mysql-server-helm \
+helm upgrade --install my-mysql ./mysql-server-helm/mysql \
   --set architecture=replication \
   --set passwordUpdateJob.enabled=true \
   --set auth.replicationPassword=replicapass123 \
@@ -1068,12 +1078,12 @@ kubectl exec -i my-mysql-primary-0 -- \
 #### Scale secondary replicas
 ```bash
 # Scale up
-helm upgrade my-mysql ./mysql-server-helm \
+helm upgrade my-mysql ./mysql-server-helm/mysql \
   --reuse-values \
   --set secondary.replicaCount=3
 
 # Scale down
-helm upgrade my-mysql ./mysql-server-helm \
+helm upgrade my-mysql ./mysql-server-helm/mysql \
   --reuse-values \
   --set secondary.replicaCount=1
 ```
@@ -1084,7 +1094,7 @@ helm upgrade my-mysql ./mysql-server-helm \
 kubectl exec my-mysql-primary-0 -- mysqldump -uroot -p${MYSQL_ROOT_PASSWORD} --all-databases > pre-upgrade-backup.sql
 
 # Upgrade
-helm upgrade my-mysql ./mysql-server-helm \
+helm upgrade my-mysql ./mysql-server-helm/mysql \
   --reuse-values \
   --set image.tag=9.4.1
 ```
@@ -1102,7 +1112,7 @@ kubectl exec my-mysql-secondary-0 -- mysql -uroot -p${MYSQL_ROOT_PASSWORD} -e "S
 kubectl delete statefulset my-mysql-primary my-mysql-secondary --cascade=orphan
 
 # 4. Upgrade with new version
-helm upgrade my-mysql ./mysql-server-helm \
+helm upgrade my-mysql ./mysql-server-helm/mysql \
   --set image.tag=9.4.1 \
   --reuse-values
 
@@ -1353,7 +1363,7 @@ volumePermissions:
 
 3. **Install new chart**:
 ```bash
-helm install my-mysql-new ./mysql-server-helm -f migration-values.yaml
+helm install my-mysql-new ./mysql-server-helm/mysql -f migration-values.yaml
 ```
 
 4. **Import data**:
@@ -1375,7 +1385,7 @@ kubectl exec my-mysql-new-primary-0 -- mysql -uroot -p${ROOT_PASSWORD} -e "SHOW 
 mysqldump -h source-mysql -uroot -p --all-databases > backup.sql
 
 # 2. Install chart
-helm install my-mysql ./mysql-server-helm --set auth.rootPassword=MyNewPassword
+helm install my-mysql ./mysql-server-helm/mysql --set auth.rootPassword=MyNewPassword
 
 # 3. Import data
 kubectl exec -i my-mysql-primary-0 -- mysql -uroot -pMyNewPassword < backup.sql
@@ -1404,7 +1414,7 @@ kubectl run mysql-migrate --image=mysql:9.4.0 --rm -it --restart=Never \
   -- bash -c "cp -r /source/data/* /var/lib/mysql/"
 
 # 3. Install chart with existing PVC
-helm install my-mysql ./mysql-server-helm \
+helm install my-mysql ./mysql-server-helm/mysql \
   --set primary.persistence.existingClaim=mysql-data-migration
 ```
 
@@ -1504,7 +1514,7 @@ metrics:
 ```
 
 ```bash
-helm install mysql-dev ./mysql-server-helm -f dev-values.yaml
+helm install mysql-dev ./mysql-server-helm/mysql -f dev-values.yaml
 ```
 
 ### Production with high availability

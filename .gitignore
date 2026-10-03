@@ -212,3 +212,14 @@ performance-*.txt
 # Add your specific files/folders here:
 # custom-config/
 # internal-docs/
+# Chart packaging and release
+dist/
+.cr-index/
+.cr-release-packages/
+
+# Editors and operating system files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.bak

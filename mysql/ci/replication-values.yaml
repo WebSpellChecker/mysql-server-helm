@@ -1,0 +1,4 @@
+# Primary with one read replica.
+architecture: replication
+secondary:
+  replicaCount: 1
