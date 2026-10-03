@@ -24,7 +24,7 @@ Before starting the testing procedures, ensure you have:
 
 - Kubernetes cluster with `kubectl` access
 - Helm 3.x installed and configured
-- MySQL Helm chart available locally (in `./mysql-server-helm` directory)
+- MySQL Helm chart available locally (in the `./mysql-server-helm/mysql` directory)
 - Basic understanding of MySQL replication concepts
 - Administrative access to the Kubernetes namespace
 
@@ -58,7 +58,7 @@ This section provides step-by-step procedures for testing password changes in bo
 #### Step 1: Deploy initial replication setup
 ```bash
 # Deploy with initial password
-helm upgrade --install my-mysql ./mysql-server-helm \
+helm upgrade --install my-mysql ./mysql-server-helm/mysql \
   --set architecture=replication \
   --set auth.rootPassword=initialpass123 \
   --set auth.replicationPassword=replicapass123
@@ -117,7 +117,7 @@ kubectl exec my-mysql-secondary-0 -- mysql -uroot -pinitialpass123 \
 #### Step 4: Execute password change
 ```bash
 # Change password using password update job
-helm upgrade --install my-mysql ./mysql-server-helm \
+helm upgrade --install my-mysql ./mysql-server-helm/mysql \
   --set architecture=replication \
   --set auth.rootPassword=newpass456 \
   --set auth.replicationPassword=replicapass123 \
@@ -197,7 +197,7 @@ kubectl exec my-mysql-secondary-0 -- mysql -uroot -pnewpass456 \
 #### Step 1: Deploy or switch to standalone mode
 ```bash
 # Deploy or switch to standalone mode with password change
-helm upgrade --install my-mysql ./mysql-server-helm \
+helm upgrade --install my-mysql ./mysql-server-helm/mysql \
   --set architecture=standalone \
   --set auth.rootPassword=standalonepass123 \
   --set passwordUpdateJob.enabled=true \
@@ -356,7 +356,7 @@ kubectl exec my-mysql-secondary-0 -- mysql -uroot -p[PASSWORD] -e "SHOW REPLICA 
 **Solutions:**
 ```bash
 # Always use password update job when switching architectures with different passwords
-helm upgrade --install my-mysql ./mysql-server-helm \
+helm upgrade --install my-mysql ./mysql-server-helm/mysql \
   --set architecture=[standalone|replication] \
   --set auth.rootPassword=newpassword \
   --set passwordUpdateJob.enabled=true \
@@ -398,7 +398,7 @@ echo "Testing password change from $CURRENT_PASSWORD to $NEW_PASSWORD in $ARCHIT
 kubectl exec my-mysql-primary-0 -- mysql -uroot -p$CURRENT_PASSWORD -e "SELECT 'Current password works' as status;"
 
 # Perform password change
-helm upgrade --install my-mysql ./mysql-server-helm \
+helm upgrade --install my-mysql ./mysql-server-helm/mysql \
   --set architecture=$ARCHITECTURE \
   --set auth.rootPassword=$NEW_PASSWORD \
   --set auth.replicationPassword=replicapass123 \

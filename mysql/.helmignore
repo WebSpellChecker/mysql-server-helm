@@ -32,4 +32,5 @@ values-*.yaml
 Jenkinsfile
 # Documentation
 docs/
-examples/
+examples/# chart-testing scenarios
+ci/

@@ -3,7 +3,7 @@ name: mysql
 description: A Helm chart for MySQL using official Docker images
 type: application
 version: 1.0.0
-appVersion: "v9.4.0"
+appVersion: "9.4.0"
 keywords:
   - mysql
   - database
@@ -17,6 +17,7 @@ maintainers:
     email: support@webspellchecker.net
 icon: https://www.mysql.com/common/logos/logo-mysql-170x115.png
 annotations:
+  artifacthub.io/license: MIT
   artifacthub.io/changes: |
     - kind: added
       description: Initial release with official MySQL images

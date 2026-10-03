@@ -77,7 +77,7 @@ Both primary and secondary deployments use StatefulSets to ensure:
 Based on extensive testing, this command consistently works:
 
 ```bash
-helm install my-mysql ./mysql-server-helm \
+helm install my-mysql ./mysql-server-helm/mysql \
   --set architecture=replication \
   --set auth.rootPassword=testroot123 \
   --set auth.replicationPassword=testrepl123 \
@@ -178,7 +178,7 @@ kubectl get storageclass
 
 ```bash
 # Basic replication installation
-helm install my-mysql ./mysql-server-helm \
+helm install my-mysql ./mysql-server-helm/mysql \
   --namespace mysql-replication \
   --set architecture=replication \
   --set auth.rootPassword=testroot123 \
@@ -390,7 +390,7 @@ Duplicate content and corrupted template structure in secondary StatefulSet temp
 **Solution:**
 ```bash
 # Check template structure
-helm template my-mysql ./mysql-server-helm --debug
+helm template my-mysql ./mysql-server-helm/mysql --debug
 
 # Look for duplicate {{end}} statements or malformed template syntax
 # Fix the template files by removing duplicate content
@@ -415,7 +415,7 @@ Secondary replication ConfigMap is not being created by the chart.
 kubectl get configmap -l app.kubernetes.io/instance=my-mysql -n mysql-replication
 
 # Check template rendering
-helm template my-mysql ./mysql-server-helm | grep -A 20 -B 5 "secondary.*configmap"
+helm template my-mysql ./mysql-server-helm/mysql | grep -A 20 -B 5 "secondary.*configmap"
 ```
 
 **Solution:**

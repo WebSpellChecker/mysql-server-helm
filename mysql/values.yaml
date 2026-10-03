@@ -80,7 +80,7 @@ initdbScriptsConfigMap: ""
 primary:
   ## Name for primary instance
   name: primary
-  
+
   ## MySQL Configuration to be injected as my.cnf
   configuration: |
     [mysqld]
@@ -89,16 +89,16 @@ primary:
     datadir=/var/lib/mysql
     socket=/var/run/mysqld/mysqld.sock
     port=3306
-    
+
     # Basic settings
     max_connections=151
     max_allowed_packet=16M
-    
+
     # Replication settings for primary
     log-bin=mysql-bin
     binlog_format=ROW
     server-id=1
-    
+
     # GTID settings (required for replication with secondary)
     gtid_mode=ON
     enforce_gtid_consistency=ON
@@ -106,30 +106,30 @@ primary:
 
   ## Existing ConfigMap with MySQL configuration
   existingConfigmap: ""
-  
+
   ## Container ports
   containerPorts:
     mysql: 3306
-  
+
   ## Update strategy
   updateStrategy:
     type: RollingUpdate
-  
+
   ## Pod management policy
   podManagementPolicy: OrderedReady
-  
+
   ## Pod annotations
   podAnnotations: {}
-  
+
   ## Pod labels
   podLabels: {}
-  
+
   ## Pod security context
   podSecurityContext:
     enabled: true
     fsGroup: 999
     runAsUser: 999
-  
+
   ## Container security context
   containerSecurityContext:
     enabled: true
@@ -139,7 +139,7 @@ primary:
     capabilities:
       drop:
         - ALL
-  
+
   ## Resource requests and limits
   resources:
     limits:
@@ -148,7 +148,7 @@ primary:
     requests:
       cpu: 250m
       memory: 256Mi
-  
+
   ## Liveness probe
   livenessProbe:
     enabled: true
@@ -157,7 +157,7 @@ primary:
     timeoutSeconds: 5
     successThreshold: 1
     failureThreshold: 3
-  
+
   ## Readiness probe
   readinessProbe:
     enabled: true
@@ -166,7 +166,7 @@ primary:
     timeoutSeconds: 5
     successThreshold: 1
     failureThreshold: 3
-  
+
   ## Startup probe
   startupProbe:
     enabled: true
@@ -175,7 +175,7 @@ primary:
     timeoutSeconds: 5
     successThreshold: 1
     failureThreshold: 30
-  
+
   ## Persistence configuration
   persistence:
     enabled: true
@@ -186,7 +186,7 @@ primary:
     annotations: {}
     selector: {}
     existingClaim: ""
-  
+
   ## Service configuration
   service:
     type: ClusterIP
@@ -199,46 +199,46 @@ primary:
     loadBalancerSourceRanges: []
     annotations: {}
     sessionAffinity: None
-  
+
   ## Pod Disruption Budget
   pdb:
     create: false
     minAvailable: 1
     maxUnavailable: ""
-  
+
   ## Extra environment variables
   extraEnvVars: []
   extraEnvVarsCM: ""
   extraEnvVarsSecret: ""
-  
+
   ## Command and args overrides
   command: []
   args: []
-  
+
   ## Lifecycle hooks
   lifecycleHooks: {}
-  
+
   ## Extra volumes
   extraVolumes: []
   extraVolumeMounts: []
-  
+
   ## Init containers
   initContainers: []
-  
+
   ## Sidecar containers
   sidecars: []
-  
+
   ## Node selection
   nodeSelector: {}
   tolerations: []
   affinity: {}
   topologySpreadConstraints: []
-  
+
   ## Priority class
   priorityClassName: ""
   schedulerName: ""
   terminationGracePeriodSeconds: 30
-  
+
   ## Host aliases
   hostAliases: []
 
@@ -246,10 +246,10 @@ primary:
 secondary:
   ## Name for secondary instances
   name: secondary
-  
+
   ## Number of secondary replicas
   replicaCount: 1
-  
+
   ## MySQL Configuration for secondary
   configuration: |
     [mysqld]
@@ -263,57 +263,57 @@ secondary:
     pid-file=/var/run/mysqld/mysqld.pid
     socket=/var/run/mysqld/mysqld.sock
     port=3306
-    
+
     # Explicitly disable skip-networking for secondary to allow external connections
     skip-networking=0
-    
+
     # Custom settings
     max_connections=151
     max_allowed_packet=16M
-    
+
     # InnoDB
     innodb_buffer_pool_size=128M
-    
+
     # Replication
     relay-log=mysql-relay-bin
     log-bin=mysql-bin
     binlog_format=ROW
     read_only=1
-    
+
     # Server ID must be unique for each server
     server-id=2
-    
+
     # GTID for better replication
     gtid_mode=ON
     enforce_gtid_consistency=ON
     log_replica_updates=ON
-    
+
   ## Existing ConfigMap with MySQL configuration
   existingConfigmap: ""
-  
+
   ## Container ports
   containerPorts:
     mysql: 3306
-  
+
   ## Update strategy
   updateStrategy:
     type: RollingUpdate
-  
+
   ## Pod management policy
   podManagementPolicy: OrderedReady
-  
+
   ## Pod annotations
   podAnnotations: {}
-  
+
   ## Pod labels
   podLabels: {}
-  
+
   ## Pod security context
   podSecurityContext:
     enabled: true
     fsGroup: 999
     runAsUser: 999
-  
+
   ## Container security context
   containerSecurityContext:
     enabled: true
@@ -323,7 +323,7 @@ secondary:
     capabilities:
       drop:
         - ALL
-  
+
   ## Resource requests and limits
   resources:
     limits:
@@ -332,7 +332,7 @@ secondary:
     requests:
       cpu: 250m
       memory: 256Mi
-  
+
   ## Liveness probe
   livenessProbe:
     enabled: true
@@ -341,7 +341,7 @@ secondary:
     timeoutSeconds: 5
     successThreshold: 1
     failureThreshold: 3
-  
+
   ## Readiness probe
   readinessProbe:
     enabled: true
@@ -350,7 +350,7 @@ secondary:
     timeoutSeconds: 5
     successThreshold: 1
     failureThreshold: 3
-  
+
   ## Startup probe
   startupProbe:
     enabled: true
@@ -359,7 +359,7 @@ secondary:
     timeoutSeconds: 5
     successThreshold: 1
     failureThreshold: 30
-  
+
   ## Persistence configuration
   persistence:
     enabled: true
@@ -369,7 +369,7 @@ secondary:
     size: 8Gi
     annotations: {}
     selector: {}
-  
+
   ## Service configuration
   service:
     type: ClusterIP
@@ -382,46 +382,46 @@ secondary:
     loadBalancerSourceRanges: []
     annotations: {}
     sessionAffinity: None
-  
+
   ## Pod Disruption Budget
   pdb:
     create: false
     minAvailable: 1
     maxUnavailable: ""
-  
+
   ## Extra environment variables
   extraEnvVars: []
   extraEnvVarsCM: ""
   extraEnvVarsSecret: ""
-  
+
   ## Command and args overrides
   command: []
   args: []
-  
+
   ## Lifecycle hooks
   lifecycleHooks: {}
-  
+
   ## Extra volumes
   extraVolumes: []
   extraVolumeMounts: []
-  
+
   ## Init containers
   initContainers: []
-  
+
   ## Sidecar containers
   sidecars: []
-  
+
   ## Node selection
   nodeSelector: {}
   tolerations: []
   affinity: {}
   topologySpreadConstraints: []
-  
+
   ## Priority class
   priorityClassName: ""
   schedulerName: ""
   terminationGracePeriodSeconds: 30
-  
+
   ## Host aliases
   hostAliases: []
 
@@ -457,7 +457,7 @@ metrics:
     repository: prom/mysqld-exporter
     tag: "v0.17.2"
     pullPolicy: IfNotPresent
-  
+
   resources:
     limits:
       cpu: 100m
@@ -465,7 +465,7 @@ metrics:
     requests:
       cpu: 50m
       memory: 64Mi
-  
+
   livenessProbe:
     enabled: true
     initialDelaySeconds: 15
@@ -473,7 +473,7 @@ metrics:
     timeoutSeconds: 5
     successThreshold: 1
     failureThreshold: 3
-  
+
   readinessProbe:
     enabled: true
     initialDelaySeconds: 5
@@ -481,12 +481,12 @@ metrics:
     timeoutSeconds: 5
     successThreshold: 1
     failureThreshold: 3
-  
+
   ## Extra arguments for the mysqld-exporter
   extraArgs:
     primary: []
     secondary: []
-  
+
   ## Prometheus ServiceMonitor
   serviceMonitor:
     enabled: false
@@ -499,7 +499,7 @@ metrics:
     metricRelabelings: []
     honorLabels: false
     jobLabel: ""
-  
+
   ## Prometheus Rules
   prometheusRule:
     enabled: false
