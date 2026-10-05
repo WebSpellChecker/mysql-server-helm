@@ -1,5 +1,10 @@
 # MySQL Helm chart - comprehensive documentation
 
+The WProofreader stack uses this chart for its MySQL server.
+To install the full stack (MySQL, WProofreader Server, and Admin-panel) step by step
+with Helm commands, follow the [Kubernetes installation guide](https://docs.wproofreader.com/deployment/installation/kubernetes).
+To install the same stack with Argo CD or Flux, use the [WProofreader GitOps examples](https://github.com/WebSpellChecker/wproofreader-gitops).
+
 ## Table of contents
 
 1. [Overview](#overview)
