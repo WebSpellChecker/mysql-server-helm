@@ -4,7 +4,7 @@ This file records changes to the MySQL Helm chart.
 The chart follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html):
 `version` tracks the chart, while `appVersion` tracks the default MySQL image.
 
-## [1.0.0]
+## [1.0.0] (2026-10-05)
 
 Initial release with the official MySQL images (default MySQL 9.4.0).
 
