@@ -1,4 +1,4 @@
-# MySQL Helm chart - comprehensive documentation
+# MySQL Helm chart
 
 ## Table of contents
 
