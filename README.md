@@ -24,7 +24,7 @@
 - **Chart name**: mysql
 - **Chart version**: 1.0.0
 - **App version**: 9.4.0
-- **Maintainer**: Kostiantyn Soloviov (ksoloviov@webspellchecker.net)
+- **Maintainer**: Infrastructure Team (support@webspellchecker.net)
 - **Repository**: [GitHub](https://github.com/WebSpellChecker/mysql-server-helm)
 
 ### Key features

@@ -13,7 +13,7 @@ sources:
   - https://github.com/mysql/mysql-server
   - https://hub.docker.com/_/mysql
 maintainers:
-  - name: Kostiantyn Soloviov
+  - name: Infrastructure Team
     email: support@webspellchecker.net
 icon: https://www.mysql.com/common/logos/logo-mysql-170x115.png
 annotations:
