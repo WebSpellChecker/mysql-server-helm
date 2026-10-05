@@ -214,8 +214,6 @@ performance-*.txt
 # internal-docs/
 # Chart packaging and release
 dist/
-.cr-index/
-.cr-release-packages/
 
 # Editors and operating system files
 .DS_Store
