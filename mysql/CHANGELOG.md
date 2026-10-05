@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.1](https://github.com/WebSpellChecker/mysql-server-helm/compare/v1.0.0...v1.0.1) - 2026-10-05
+
+### Bug fixes
+
+* **chart:** list the infrastructure team as maintainer ([82d17fe](https://github.com/WebSpellChecker/mysql-server-helm/commit/82d17fec053242a5134e1f56e8297dbe5a6a9cf5))
+
 ## [1.0.0](https://github.com/WebSpellChecker/mysql-server-helm/releases/tag/v1.0.0) - 2026-10-05
 
 ### Features
