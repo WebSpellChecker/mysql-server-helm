@@ -1,7 +1,6 @@
 # Changelog
 
-## [1.0.0](https://github.com/WebSpellChecker/mysql-server-helm/releases/tag/v1.0.0) (2026-10-05)
-
+## [1.0.0](https://github.com/WebSpellChecker/mysql-server-helm/releases/tag/v1.0.0) - 2026-10-05
 
 ### Features
 
