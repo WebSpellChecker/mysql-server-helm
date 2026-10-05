@@ -1330,52 +1330,6 @@ primary:
 
 ## Migration guide
 
-### From Bitnami MySQL chart
-
-#### Key differences
-
-| Aspect                 | Bitnami chart                      | This chart                               |
-|------------------------|------------------------------------|------------------------------------------|
-| Base image             | `bitnami/mysql`                    | `mysql` (official)                       |
-| Data path              | `/bitnami/mysql`                   | `/var/lib/mysql`                         |
-| Init scripts           | Custom Bitnami scripts             | Standard `/docker-entrypoint-initdb.d/` |
-| Environment variables  | `MYSQL_REPLICATION_MODE`           | Standard MySQL vars                      |
-| Default authentication | `mysql_native_password`            | `mysql_native_password`                  |
-
-#### Migration steps
-
-1. **Export data**:
-```bash
-# From Bitnami installation
-kubectl exec bitnami-mysql-primary-0 -- mysqldump -uroot -p${ROOT_PASSWORD} --all-databases > migration.sql
-```
-
-2. **Prepare values**:
-```yaml
-# migration-values.yaml
-architecture: replication  # or standalone
-auth:
-  rootPassword: "same-as-bitnami"
-  replicationPassword: "same-as-bitnami"
-volumePermissions:
-  enabled: true
-```
-
-3. **Install new chart**:
-```bash
-helm install my-mysql-new ./mysql-server-helm/mysql -f migration-values.yaml
-```
-
-4. **Import data**:
-```bash
-kubectl exec -i my-mysql-new-primary-0 -- mysql -uroot -p${ROOT_PASSWORD} < migration.sql
-```
-
-5. **Verify**:
-```bash
-kubectl exec my-mysql-new-primary-0 -- mysql -uroot -p${ROOT_PASSWORD} -e "SHOW DATABASES"
-```
-
 ### From standalone MySQL
 
 #### Using mysqldump
