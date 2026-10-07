@@ -165,6 +165,15 @@ jobs:
       - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310  # v5.0.1
         if: steps.chart.outputs.changed == 'true'
 
+      - name: Unload the AppArmor profile of the runner MySQL
+        # The runner has MySQL with an AppArmor profile for /usr/sbin/mysqld. The profile also
+        # confines mysqld in the kind containers, which then cannot read /etc/my.cnf.
+        if: steps.chart.outputs.changed == 'true'
+        run: |
+          if [ -f /etc/apparmor.d/usr.sbin.mysqld ]; then
+            sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+          fi
+
       - name: Create a kind cluster
         if: steps.chart.outputs.changed == 'true'
         env:
