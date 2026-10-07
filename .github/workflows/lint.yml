@@ -137,3 +137,74 @@ jobs:
         env:
           TARGET_BRANCH: ${{ github.base_ref || github.event.repository.default_branch }}
         run: ct lint --config ct.yaml --target-branch "$TARGET_BRANCH"
+
+  install:
+    # Installs the chart on a kind cluster once for each scenario in mysql/ci/ and runs helm test.
+    if: github.event.action != 'edited'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check whether the chart changed
+        id: chart
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          # A pull request that does not change mysql/, for example a docs change, needs no cluster.
+          if [ -n "${BASE_SHA}" ] && git diff --quiet "${BASE_SHA}...HEAD" -- mysql/; then
+            echo "The pull request does not change mysql/: no install test."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310  # v5.0.1
+        if: steps.chart.outputs.changed == 'true'
+
+      - name: Create a kind cluster
+        if: steps.chart.outputs.changed == 'true'
+        env:
+          KIND_VERSION: v0.33.0
+          PROMETHEUS_OPERATOR_VERSION: v0.94.1
+        run: |
+          base="https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}"
+          curl --fail --silent --show-error --location --output kind "${base}/kind-linux-amd64"
+          curl --fail --silent --show-error --location --output kind.sha256sum "${base}/kind-linux-amd64.sha256sum"
+          echo "$(cut -d ' ' -f 1 kind.sha256sum)  kind" | sha256sum --check --strict
+          sudo install -m 0755 kind /usr/local/bin/kind
+          kind create cluster --wait 120s
+          # The monitoring scenario renders a ServiceMonitor and a PrometheusRule.
+          crds="https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/${PROMETHEUS_OPERATOR_VERSION}/example/prometheus-operator-crd"
+          for crd in servicemonitors prometheusrules; do
+            kubectl apply --server-side -f "${crds}/monitoring.coreos.com_${crd}.yaml"
+          done
+
+      - name: Install each scenario and run helm test
+        if: steps.chart.outputs.changed == 'true'
+        run: |
+          for values in mysql/ci/*-values.yaml; do
+            scenario=$(basename "${values}" -values.yaml)
+            namespace="ci-${scenario}"
+            echo "::group::${scenario}"
+            kubectl create namespace "${namespace}"
+            if [ "${scenario}" = existing-secret ]; then
+              # The scenario reads the passwords from a Secret that exists before the install.
+              kubectl -n "${namespace}" create secret generic mysql-credentials \
+                --from-literal=mysql-root-password="$(openssl rand -hex 16)" \
+                --from-literal=mysql-password="$(openssl rand -hex 16)"
+            fi
+            if ! helm install mysql ./mysql -n "${namespace}" -f "${values}" --wait --timeout 10m \
+              || ! helm test mysql -n "${namespace}" --logs; then
+              echo "::endgroup::"
+              echo "::error::The ${scenario} scenario failed."
+              kubectl -n "${namespace}" get pods,events -o wide || true
+              kubectl -n "${namespace}" logs -l app.kubernetes.io/instance=mysql --all-containers --tail 50 || true
+              exit 1
+            fi
+            helm uninstall mysql -n "${namespace}" --wait
+            kubectl delete namespace "${namespace}" --wait=false
+            echo "::endgroup::"
+          done
