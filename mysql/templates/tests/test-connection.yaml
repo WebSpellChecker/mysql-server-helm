@@ -1,3 +1,7 @@
+# `helm test` writes and reads a table on the primary, checks the application user (auth.username),
+# and with replication checks that a row reaches the secondary.
+{{ $primaryHost := printf "%s.%s.svc.%s" (include "mysql.primary.fullname" .) .Release.Namespace .Values.clusterDomain -}}
+{{- $secondaryHost := printf "%s.%s.svc.%s" (include "mysql.secondary.fullname" .) .Release.Namespace .Values.clusterDomain -}}
 apiVersion: v1
 kind: Pod
 metadata:
@@ -16,34 +20,64 @@ spec:
       image: {{ include "mysql.image" . }}
       imagePullPolicy: {{ .Values.image.pullPolicy }}
       env:
-        - name: MYSQL_ROOT_PASSWORD
+        # The mysql client reads the password from MYSQL_PWD.
+        - name: MYSQL_PWD
           valueFrom:
             secretKeyRef:
               name: {{ include "mysql.secretName" . }}
               key: mysql-root-password
+        {{- if .Values.auth.username }}
+        - name: MYSQL_USER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "mysql.secretName" . }}
+              key: mysql-password
+        {{- end }}
       command:
         - /bin/bash
         - -ec
         - |
+          primary={{ $primaryHost | quote }}
+          sql() { mysql -h "$1" -uroot -N -B -e "$2"; }
+          token="helm-test-$(date +%s)-${RANDOM}"
+
+          echo "Primary: MySQL $(sql "${primary}" 'SELECT VERSION()')"
+          # The test writes only to its own database and drops it at the end.
+          trap 'sql "${primary}" "DROP DATABASE IF EXISTS helm_test" || true' EXIT
+          sql "${primary}" "CREATE DATABASE IF NOT EXISTS helm_test;
+            CREATE TABLE IF NOT EXISTS helm_test.checks (id INT AUTO_INCREMENT PRIMARY KEY, token VARCHAR(64) NOT NULL);
+            INSERT INTO helm_test.checks (token) VALUES ('${token}');"
+          if [ "$(sql "${primary}" "SELECT token FROM helm_test.checks WHERE token = '${token}'")" != "${token}" ]; then
+            echo "Primary: the row that the test wrote cannot be read" >&2
+            exit 1
+          fi
+          echo "Primary: database, table, write, and read OK"
+          {{- if .Values.auth.username }}
+
+          # The application user works in its own database.
+          MYSQL_PWD="${MYSQL_USER_PASSWORD}" mysql -h "${primary}" -u{{ .Values.auth.username | quote }} -N -B \
+            {{ .Values.auth.database | quote }} -e "CREATE TABLE helm_test_checks (id INT PRIMARY KEY);
+              INSERT INTO helm_test_checks VALUES (1);
+              SELECT COUNT(*) FROM helm_test_checks;
+              DROP TABLE helm_test_checks;" | grep -qx 1
+          echo "User {{ .Values.auth.username }}: table in {{ .Values.auth.database }} created, written, read, and dropped"
+          {{- end }}
           {{- if eq .Values.architecture "replication" }}
-          echo "Testing primary connection..."
-          mysql -h{{ include "mysql.primary.fullname" . }}.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }} \
-                -uroot \
-                -p"${MYSQL_ROOT_PASSWORD}" \
-                -e "SELECT 1" || exit 1
-          echo "Primary connection successful!"
-          
-          echo "Testing secondary connection..."
-          mysql -h{{ include "mysql.secondary.fullname" . }}.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }} \
-                -uroot \
-                -p"${MYSQL_ROOT_PASSWORD}" \
-                -e "SELECT 1" || exit 1
-          echo "Secondary connection successful!"
-          {{- else }}
-          echo "Testing MySQL connection..."
-          mysql -h{{ include "mysql.primary.fullname" . }}.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }} \
-                -uroot \
-                -p"${MYSQL_ROOT_PASSWORD}" \
-                -e "SELECT 1" || exit 1
-          echo "Connection successful!"
+
+          # The row that the primary wrote must reach the secondary.
+          secondary={{ $secondaryHost | quote }}
+          for attempt in $(seq 1 30); do
+            if [ "$(sql "${secondary}" "SELECT token FROM helm_test.checks WHERE token = '${token}'" 2>/dev/null || true)" = "${token}" ]; then
+              echo "Secondary: the row from the primary arrived (attempt ${attempt})"
+              break
+            fi
+            if [ "${attempt}" -eq 30 ]; then
+              echo "Secondary: the row from the primary did not arrive in 60 seconds" >&2
+              sql "${secondary}" "SELECT CONCAT('connection: ', SERVICE_STATE, ' ', LAST_ERROR_MESSAGE)
+                FROM performance_schema.replication_connection_status;
+                SELECT CONCAT('applier: ', SERVICE_STATE) FROM performance_schema.replication_applier_status;" >&2 || true
+              exit 1
+            fi
+            sleep 2
+          done
           {{- end }}

@@ -251,13 +251,14 @@ spec:
                 - /bin/bash
                 - -ec
                 - |
-                  # For existing installations, password might be different from env var
-                  # Try connecting without password first (for fresh installs during init)
-                  if mysqladmin ping -uroot 2>/dev/null; then
+                  # Ready only when MySQL accepts TCP connections: during the first initialization
+                  # the temporary server of the entrypoint listens only on the socket.
+                  # A ping without the password also answers when the server is up.
+                  if mysqladmin ping -h 127.0.0.1 -P {{ .Values.primary.containerPorts.mysql }} -uroot 2>/dev/null; then
                     exit 0
                   fi
                   # Try with environment variable password
-                  if mysqladmin ping -uroot -p"${MYSQL_ROOT_PASSWORD}" 2>/dev/null; then
+                  if mysqladmin ping -h 127.0.0.1 -P {{ .Values.primary.containerPorts.mysql }} -uroot -p"${MYSQL_ROOT_PASSWORD}" 2>/dev/null; then
                     exit 0
                   fi
                   # If both fail, the database is not accessible
