@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.2](https://github.com/WebSpellChecker/mysql-server-helm/compare/v1.0.1...v1.0.2) - 2026-10-07
+
+### Bug fixes
+
+* create the chart Secret when auth.existingSecret is not set (#14) ([b4ddecd](https://github.com/WebSpellChecker/mysql-server-helm/commit/b4ddecd6e18531268d0c661953dd37c03fc2415f))
+* set up replication on the secondary through the local socket (#15) ([01338c3](https://github.com/WebSpellChecker/mysql-server-helm/commit/01338c33ad751250d450daea09a21464e643f7a7))
+
 ## [1.0.1](https://github.com/WebSpellChecker/mysql-server-helm/compare/v1.0.0...v1.0.1) - 2026-10-05
 
 ### Bug fixes
