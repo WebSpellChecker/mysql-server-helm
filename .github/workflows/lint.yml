@@ -153,9 +153,10 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          # A pull request that does not change mysql/, for example a docs change, needs no cluster.
-          if [ -n "${BASE_SHA}" ] && git diff --quiet "${BASE_SHA}...HEAD" -- mysql/; then
-            echo "The pull request does not change mysql/: no install test."
+          # A pull request that changes neither mysql/ nor this workflow, for example a docs change,
+          # needs no cluster.
+          if [ -n "${BASE_SHA}" ] && git diff --quiet "${BASE_SHA}...HEAD" -- mysql/ .github/workflows/lint.yml; then
+            echo "The pull request changes neither mysql/ nor lint.yml: no install test."
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
