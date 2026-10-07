@@ -5,6 +5,30 @@ entries:
       artifacthub.io/license: MIT
     apiVersion: v2
     appVersion: 9.4.0
+    created: "2026-10-07T23:05:41.912296582Z"
+    description: A Helm chart for MySQL using official Docker images
+    digest: 167c5db917eb8ab090d140f4cb52647442f0d2baaf0e5a947ba8960bd3b395fb
+    home: https://www.mysql.com/
+    icon: https://www.mysql.com/common/logos/logo-mysql-170x115.png
+    keywords:
+    - mysql
+    - database
+    - sql
+    maintainers:
+    - email: support@webspellchecker.net
+      name: Infrastructure Team
+    name: mysql
+    sources:
+    - https://github.com/mysql/mysql-server
+    - https://hub.docker.com/_/mysql
+    type: application
+    urls:
+    - https://github.com/WebSpellChecker/mysql-server-helm/releases/download/v1.1.0/mysql-1.1.0.tgz
+    version: 1.1.0
+  - annotations:
+      artifacthub.io/license: MIT
+    apiVersion: v2
+    appVersion: 9.4.0
     created: "2026-10-05T12:46:37.94680027Z"
     description: A Helm chart for MySQL using official Docker images
     digest: 84ab6b490012b2446b9ecdd7d78655b2f767052bd04eb7a6fcb6936928140690
@@ -52,4 +76,4 @@ entries:
     urls:
     - https://github.com/WebSpellChecker/mysql-server-helm/releases/download/v1.0.0/mysql-1.0.0.tgz
     version: 1.0.0
-generated: "2026-10-05T12:46:37.94231212Z"
+generated: "2026-10-07T23:05:41.910413283Z"
