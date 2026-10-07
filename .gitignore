@@ -30,6 +30,8 @@ values-production.yaml
 values-staging.yaml
 secret-values.yaml
 secrets.yaml
+# The chart template that creates the Secret is not a local secret file.
+!/mysql/templates/secrets.yaml
 *-secrets.yaml
 *.secret.yaml
 mysql-passwords.yaml
