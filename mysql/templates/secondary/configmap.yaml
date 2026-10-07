@@ -31,7 +31,7 @@ data:
     # Wait for MySQL to be ready
     echo "Waiting for MySQL to be ready..."
     for i in {1..60}; do
-      if mysqladmin ping -h127.0.0.1 -uroot -p"${MYSQL_ROOT_PASSWORD}" --silent 2>/dev/null; then
+      if mysqladmin ping -uroot -p"${MYSQL_ROOT_PASSWORD}" --silent 2>/dev/null; then
         echo "MySQL is ready!"
         break
       fi
@@ -43,13 +43,13 @@ data:
     done
     
     # Check if replication is already configured
-    REPLICA_STATUS=$(mysql -h127.0.0.1 -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "SHOW REPLICA STATUS" --skip-column-names --silent 2>/dev/null | wc -l)
+    REPLICA_STATUS=$(mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "SHOW REPLICA STATUS" --skip-column-names --silent 2>/dev/null | wc -l)
     
     if [ "$REPLICA_STATUS" -gt "0" ]; then
       echo "Replication already configured. Checking status..."
-      IO_RUNNING=$(mysql -h127.0.0.1 -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "SHOW REPLICA STATUS" --skip-column-names --silent 2>/dev/null | awk '{print $11}')
-      SQL_RUNNING=$(mysql -h127.0.0.1 -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "SHOW REPLICA STATUS" --skip-column-names --silent 2>/dev/null | awk '{print $12}')
-      if [ "$IO_RUNNING" = "Yes" ] && [ "$SQL_RUNNING" = "Yes" ]; then
+      IO_RUNNING=$(mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT SERVICE_STATE FROM performance_schema.replication_connection_status" --skip-column-names --silent 2>/dev/null)
+      SQL_RUNNING=$(mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT SERVICE_STATE FROM performance_schema.replication_applier_status" --skip-column-names --silent 2>/dev/null)
+      if [ "$IO_RUNNING" = "ON" ] && [ "$SQL_RUNNING" = "ON" ]; then
         echo "Replication is running correctly. Exiting."
         exit 0
       else
@@ -59,7 +59,7 @@ data:
     
     # Configure replication using MySQL 9.4 syntax with SSL
     echo "Configuring replication..."
-    mysql -h127.0.0.1 -uroot -p"${MYSQL_ROOT_PASSWORD}" <<EOF
+    mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" <<EOF
     STOP REPLICA;
     CHANGE REPLICATION SOURCE TO
       SOURCE_HOST='${MYSQL_MASTER_HOST}',
@@ -73,10 +73,10 @@ data:
     
     # Verify replication started
     sleep 2
-    IO_RUNNING=$(mysql -h127.0.0.1 -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "SHOW REPLICA STATUS" --skip-column-names --silent 2>/dev/null | awk '{print $11}')
-    SQL_RUNNING=$(mysql -h127.0.0.1 -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "SHOW REPLICA STATUS" --skip-column-names --silent 2>/dev/null | awk '{print $12}')
+    IO_RUNNING=$(mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT SERVICE_STATE FROM performance_schema.replication_connection_status" --skip-column-names --silent 2>/dev/null)
+    SQL_RUNNING=$(mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT SERVICE_STATE FROM performance_schema.replication_applier_status" --skip-column-names --silent 2>/dev/null)
     
-    if [ "$IO_RUNNING" = "Yes" ] && [ "$SQL_RUNNING" = "Yes" ]; then
+    if [ "$IO_RUNNING" = "ON" ] && [ "$SQL_RUNNING" = "ON" ]; then
       echo "✓ Replication setup completed successfully"
     else
       echo "⚠ Replication setup may have issues. IO_RUNNING: $IO_RUNNING, SQL_RUNNING: $SQL_RUNNING"
