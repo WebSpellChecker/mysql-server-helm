@@ -1,6 +1,10 @@
 # Changelog
 
-## [1.0.2](https://github.com/WebSpellChecker/mysql-server-helm/compare/v1.0.1...v1.0.2) - 2026-10-07
+## [1.1.0](https://github.com/WebSpellChecker/mysql-server-helm/compare/v1.0.1...v1.1.0) - 2026-10-07
+
+### Features
+
+* check writes, the application user, and replication in helm test (#17) ([2933dfa](https://github.com/WebSpellChecker/mysql-server-helm/commit/2933dfa7af560b5b674882252bc29a84c0c58b95))
 
 ### Bug fixes
 
