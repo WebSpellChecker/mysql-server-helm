@@ -197,7 +197,7 @@ jobs:
                 --from-literal=mysql-root-password="$(openssl rand -hex 16)" \
                 --from-literal=mysql-password="$(openssl rand -hex 16)"
             fi
-            if ! helm install mysql ./mysql -n "${namespace}" -f "${values}" --wait --timeout 10m \
+            if ! helm install mysql ./mysql -n "${namespace}" -f "${values}" --wait --timeout 2m \
               || ! helm test mysql -n "${namespace}" --logs; then
               echo "::endgroup::"
               echo "::error::The ${scenario} scenario failed."
