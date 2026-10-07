@@ -241,7 +241,9 @@ spec:
                 - /bin/bash
                 - -ec
                 - |
-                  mysqladmin status -uroot -p"${MYSQL_ROOT_PASSWORD}"
+                  # Ready only when MySQL accepts TCP connections: during the first initialization
+                  # the temporary server of the entrypoint listens only on the socket.
+                  mysqladmin status -h 127.0.0.1 -P {{ .Values.secondary.containerPorts.mysql }} -uroot -p"${MYSQL_ROOT_PASSWORD}"
             initialDelaySeconds: {{ .Values.secondary.readinessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.secondary.readinessProbe.periodSeconds }}
             timeoutSeconds: {{ .Values.secondary.readinessProbe.timeoutSeconds }}
