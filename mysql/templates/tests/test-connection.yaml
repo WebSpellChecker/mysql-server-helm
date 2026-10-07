@@ -1,6 +1,6 @@
 # `helm test` writes and reads a table on the primary, checks the application user (auth.username),
 # and with replication checks that a row reaches the secondary.
-{{- $primaryHost := printf "%s.%s.svc.%s" (include "mysql.primary.fullname" .) .Release.Namespace .Values.clusterDomain -}}
+{{ $primaryHost := printf "%s.%s.svc.%s" (include "mysql.primary.fullname" .) .Release.Namespace .Values.clusterDomain -}}
 {{- $secondaryHost := printf "%s.%s.svc.%s" (include "mysql.secondary.fullname" .) .Release.Namespace .Values.clusterDomain -}}
 apiVersion: v1
 kind: Pod
